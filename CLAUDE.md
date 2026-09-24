@@ -12,9 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Embedded CSS in `<style>`, JS in a single `<script>`. All UI copy and code comments are written in **Chinese** — keep new UI text and comments in Chinese to match.
 
-## Critical: dual hard-linked paths
+## Location
 
-`/Volumes/Storage/Labs/teachable_agent/index.html` and `/Users/roadlabs/labs/teachable_agent/index.html` are the **same file** (hard link). Edits to either path apply to both — never create or treat them as separate copies.
+Project root: `/Users/roadlabs/MyProjects2026/teachable_agent`. Single working copy (was previously also reachable via two hard-linked paths under `/Volumes/Storage/Labs`; that directory was moved here, so the old paths no longer exist).
 
 ## No build / lint / test tooling
 
