@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teachable Agent · 可训练智能体</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #f5f7fb 0%, #eef1f7 100%);
+    color: #1f2937;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  /* ============ Header ============ */
+  .app-header { padding: 28px 36px 12px; }
+  .app-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(90deg, #6366f1 0%, #f59e0b 50%, #10b981 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    letter-spacing: -0.5px;
+  }
+  .app-header .subtitle {
+    color: #6b7280;
+    font-size: 14px;
+    margin-top: 4px;
+  }
+  .app-header .badges {
+    margin-top: 8px;
+    display: flex;
+    gap: 6px;
+  }
+  .badge {
+    font-size: 11px;
+    color: #6b7280;
+    background: #fff;
+    padding: 3px 8px;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+  }
+
+  /* ============ Workspace ============ */
+  .workspace {
+    flex: 1;
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 60px;
+    padding: 20px 36px 36px;
+    align-items: stretch;
+    min-height: 560px;
+  }
+
+  .layer {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 560px;
+    position: relative;
+    z-index: 2;
+  }
+  .ui-layer { border-top: 4px solid #6366f1; }
+  .data-layer { border-top: 4px solid #f59e0b; }
+  .api-layer { border-top: 4px solid #10b981; }
+
+  .layer-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid #f1f3f7;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .layer-icon { font-size: 18px; }
+  .layer-header h2 { font-size: 15px; font-weight: 600; flex: 1; }
+
+  /* ============ Connections overlay ============ */
+  .connections-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 1;
+  }
+  .conn-line {
+    fill: none;
+    stroke: #cbd5e1;
+    stroke-width: 2;
+    stroke-linecap: round;
+    opacity: 0.55;
+    transition: stroke 0.3s ease, opacity 0.3s ease, stroke-width 0.3s ease;
+  }
+  .conn-line.active-req  { stroke: #fbbf24; opacity: 1; stroke-width: 3; }
+  .conn-line.active-resp { stroke: #10b981; opacity: 1; stroke-width: 3; }
+  .ball { will-change: transform, opacity; }
+
+  /* ============ UI Layer ============ */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .msg {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    animation: msgIn 0.25s ease-out;
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg.user {
+    background: linear-gradient(135deg, #6366f1, #818cf8);
+    color: #fff;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.assistant {
+    background: #f3f4f6;
+    color: #1f2937;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+  .msg.error {
+    background: #fef2f2;
+    color: #b91c1c;
+    align-self: flex-start;
+    border: 1px solid #fecaca;
+    font-size: 13px;
+  }
+  .msg.thinking {
+    background: #f3f4f6;
+    color: #6b7280;
+    align-self: flex-start;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    height: 38px;
+  }
+  .thinking-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #9ca3af;
+    animation: bounce 1.4s infinite ease-in-out both;
+  }
+  .thinking-dot:nth-child(2) { animation-delay: 0.16s; }
+  .thinking-dot:nth-child(3) { animation-delay: 0.32s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  .composer {
+    border-top: 1px solid #f1f3f7;
+    padding: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  .composer textarea {
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    transition: border-color 0.2s;
+    min-height: 40px;
+    max-height: 140px;
+    line-height: 1.4;
+  }
+  .composer textarea:focus { border-color: #6366f1; }
+
+  /* ============ Buttons ============ */
+  .primary-btn {
+    background: linear-gradient(135deg, #6366f1, #818cf8);
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+    font-family: inherit;
+  }
+  .primary-btn:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
+  .primary-btn:active:not(:disabled) { transform: scale(0.97); }
+  .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+  .ghost-btn {
+    background: transparent;
+    border: 1px solid #e5e7eb;
+    color: #6b7280;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .ghost-btn:hover { border-color: #6366f1; color: #6366f1; }
+  .ghost-btn.danger:hover { border-color: #ef4444; color: #ef4444; }
+
+  .icon-btn {
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0 10px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .icon-btn:hover { background: #e5e7eb; }
+
+  /* ============ Data Layer ============ */
+  .counter {
+    background: #f59e0b;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+  }
+  .layer-actions { display: flex; gap: 6px; }
+  .data-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .data-item {
+    background: #fafbfc;
+    border: 1px solid #eef0f4;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    animation: slideIn 0.35s ease-out;
+    transition: background 0.2s, border-color 0.3s, box-shadow 0.3s;
+  }
+  .data-item:hover { background: #fff; }
+  .data-item.input-new {
+    animation: slideIn 0.35s ease-out, inputPulse 0.9s ease-out;
+  }
+  .data-item .data-block { padding: 2px 0; }
+  .data-item .output-block {
+    margin-top: 6px;
+    border-top: 1px dashed #eef0f4;
+    padding-top: 8px;
+    border-radius: 0 0 6px 6px;
+  }
+  .data-item.output-new .output-block {
+    animation: outputReveal 0.8s ease-out;
+  }
+  /* pending 卡片只渲染 input 面板 —— 等待状态由 API 层动画表达 */
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes inputPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(99,102,241,0.55); border-color: #6366f1; }
+    100% { box-shadow: 0 0 0 12px rgba(99,102,241,0); border-color: #eef0f4; }
+  }
+  @keyframes outputReveal {
+    0%   { opacity: 0; transform: translateY(-6px); box-shadow: inset 0 0 0 2px rgba(16,185,129,0.35); }
+    60%  { opacity: 1; transform: translateY(0);    box-shadow: inset 0 0 0 2px rgba(16,185,129,0.15); }
+    100% { opacity: 1; transform: translateY(0);    box-shadow: inset 0 0 0 0 rgba(16,185,129,0); }
+  }
+
+  /* ============ Text flyer (HTML bubble flying along data path) ============ */
+  .text-flyer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    pointer-events: none;
+    background: linear-gradient(135deg, #6366f1, #818cf8);
+    color: #fff;
+    padding: 7px 14px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+    box-shadow: 0 8px 24px rgba(99,102,241,0.35);
+    will-change: transform, opacity;
+  }
+  .text-flyer.output {
+    background: linear-gradient(135deg, #10b981, #34d399);
+    box-shadow: 0 8px 24px rgba(16,185,129,0.35);
+  }
+  .data-item.flying-in { opacity: 0; transform: scale(0.94); }
+  .msg.flying-in      { opacity: 0; transform: scale(0.9); }
+  @keyframes msgLand {
+    0%   { opacity: 0; transform: scale(0.9); }
+    60%  { opacity: 1; transform: scale(1.04); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  .msg.landing { animation: msgLand 0.45s ease-out; }
+  .data-item-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 4px;
+  }
+  .data-item-header + .data-item-text {
+    margin-bottom: 8px;
+  }
+  .data-item-tag {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .tag-input { background: #ede9fe; color: #6366f1; }
+  .tag-output { background: #d1fae5; color: #047857; }
+  .data-item-text {
+    margin: 4px 0;
+    line-height: 1.5;
+    color: #1f2937;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  /* 拖拽手柄：卡内顶部整条可抓取区 */
+  .card-grip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: -10px -12px 4px;
+    padding: 7px 0;
+    color: #cbd5e1;
+    font-size: 11px;
+    letter-spacing: 2px;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    border-radius: 9px 9px 0 0;
+    transition: color 0.2s, background 0.2s;
+  }
+  .card-grip:hover { color: #94a3b8; background: #f1f3f7; }
+  .card-grip:active { cursor: grabbing; }
+
+  /* 拖拽中的源卡片 + 落点指示（内侧上/下琥珀条） */
+  .data-item.dragging {
+    opacity: 0.45;
+    border-style: dashed;
+    border-color: #f59e0b;
+  }
+  .data-item.drop-before { box-shadow: inset 0 3px 0 0 #f59e0b; }
+  .data-item.drop-after  { box-shadow: inset 0 -3px 0 0 #f59e0b; }
+
+  /* 面板级删除按钮（每个面板 header 最右） */
+  .panel-del {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #cbd5e1;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-family: inherit;
+  }
+  .panel-del:hover { color: #ef4444; background: #fef2f2; }
+
+  /* ============ API Layer ============ */
+
+  /* 等待模型响应 —— API 层动画（脉动徽章 + 连接线流光） */
+  .api-waiting {
+    background: #fef3c7;
+    color: #b45309;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px 3px 14px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    animation: waitGlow 1.5s ease-in-out infinite;
+  }
+  .api-waiting::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #f59e0b;
+    animation: waitDotPulse 1.2s ease-in-out infinite;
+  }
+  .api-waiting[hidden] { display: none; }
+  @keyframes waitGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.45); }
+    50%      { box-shadow: 0 0 0 7px rgba(245,158,11,0); }
+  }
+  @keyframes waitDotPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.35; transform: scale(0.75); }
+  }
+
+  .api-form {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  .api-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+  }
+  .api-form input, .api-form select {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    background: #fff;
+    color: #1f2937;
+  }
+  .api-form select { cursor: pointer; }
+  .api-form input:focus, .api-form select:focus { border-color: #10b981; }
+  .key-input { display: flex; gap: 4px; }
+  .key-input input { flex: 1; }
+
+  .api-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 6px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .api-hint { font-size: 11px; color: #9ca3af; line-height: 1.4; }
+  .api-hint code {
+    background: #f3f4f6;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+  }
+
+  /* ============ Shared ============ */
+  .empty-state {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 13px;
+    padding: 40px 20px;
+    font-style: italic;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+  /* Responsive */
+  @media (max-width: 1100px) {
+    .workspace {
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+    .connections-overlay { display: none; }
+    .layer { min-height: 480px; }
+    .app-header { padding: 16px 16px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>Teachable Agent</h1>
+  <p class="subtitle">用户界面 · 数据存储 · 服务接口 — 三层联动，数据持久化在浏览器本地</p>
+  <div class="badges">
+    <span class="badge">OpenAI 兼容</span>
+    <span class="badge">localStorage</span>
+    <span class="badge">单文件 · 无依赖</span>
+  </div>
+</header>
+
+<main class="workspace">
+
+  <!-- ===== UI Layer ===== -->
+  <section class="layer ui-layer" id="uiLayer">
+    <div class="layer-header">
+      <span class="layer-icon">💬</span>
+      <h2>用户界面</h2>
+      <button class="ghost-btn" id="clearChatBtn">清空对话</button>
+    </div>
+    <div class="messages" id="messages">
+      <div class="empty-state">点击下方输入框开始对话…</div>
+    </div>
+    <form class="composer" id="composer">
+      <textarea id="userInput" placeholder="输入消息…（Enter 发送，Shift+Enter 换行）" rows="1"></textarea>
+      <button type="submit" class="primary-btn" id="sendBtn">发送</button>
+    </form>
+  </section>
+
+  <!-- ===== Data Layer ===== -->
+  <section class="layer data-layer" id="dataLayer">
+    <div class="layer-header">
+      <span class="layer-icon">📚</span>
+      <h2>数据存储</h2>
+      <span class="counter" id="dataCount">0</span>
+      <div class="layer-actions">
+        <button class="ghost-btn" id="exportDataBtn">导出 JSON</button>
+        <button class="ghost-btn danger" id="clearDataBtn">清空</button>
+      </div>
+    </div>
+    <div class="data-list" id="dataList">
+      <div class="empty-state">还没有训练数据。开始聊天后会自动累积。<br>💡 数据层同时是 LLM 的对话上下文 —— 清空数据层后 LLM 会失去历史记忆。<br>🖐 拖拽卡片顶部手柄可调整顺序；input / output 面板可分别点 × 删除。<br>点击右上角「导出」可下载为 JSON。</div>
+    </div>
+  </section>
+
+  <!-- ===== API Layer ===== -->
+  <section class="layer api-layer" id="apiLayer">
+    <div class="layer-header">
+      <span class="layer-icon">🔌</span>
+      <h2>服务接口</h2>
+      <span class="api-waiting" id="apiWaiting" hidden>等待响应…</span>
+    </div>
+    <form class="api-form" id="apiForm">
+      <label>
+        <span>Provider</span>
+        <select id="provider">
+          <option value="openai">OpenAI</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="moonshot">Moonshot (月之暗面)</option>
+          <option value="agnes">Agnes</option>
+          <option value="ollama">Ollama (本地)</option>
+          <option value="lmstudio">LM Studio (本地)</option>
+          <option value="custom">自定义</option>
+        </select>
+      </label>
+      <label>
+        <span>Base URL</span>
+        <input type="url" id="baseUrl" placeholder="https://api.openai.com/v1" autocomplete="off" spellcheck="false">
+      </label>
+      <label>
+        <span>Model</span>
+        <input type="text" id="modelName" placeholder="gpt-4o-mini" autocomplete="off" spellcheck="false">
+      </label>
+      <label>
+        <span>API Key</span>
+        <div class="key-input">
+          <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off" spellcheck="false">
+          <button type="button" class="icon-btn" id="toggleKeyBtn" title="显示/隐藏">👁</button>
+        </div>
+      </label>
+      <div class="api-actions">
+        <button type="button" class="ghost-btn" id="testConnBtn">测试连接</button>
+        <span class="api-hint">所有配置保存在浏览器 localStorage</span>
+      </div>
+    </form>
+  </section>
+
+  <!-- ===== Connections Overlay (SVG) ===== -->
+  <svg class="connections-overlay" id="connectionsOverlay" preserveAspectRatio="none">
+    <g id="conn1Group" class="conn-1">
+      <path id="path1" class="conn-line" d=""/>
+    </g>
+    <g id="conn2Group" class="conn-2">
+      <path id="path2" class="conn-line" d=""/>
+    </g>
+  </svg>
+
+</main>
+
+<script>
+'use strict';
+
+// =====================================================================
+// Provider presets (all OpenAI-compatible /v1/chat/completions)
+// =====================================================================
+const PROVIDERS = {
+  openai:    { baseUrl: 'https://api.openai.com/v1',   model: 'gpt-4o-mini' },
+  deepseek:  { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+  moonshot:  { baseUrl: 'https://api.moonshot.cn/v1',  model: 'moonshot-v1-8k' },
+  agnes:     { baseUrl: 'https://api.agnes-ai.cn/v1/chat/completions', model: 'agnes-3.0-flash' },
+  ollama:    { baseUrl: 'http://localhost:11434/v1',   model: 'llama3.2' },
+  lmstudio:  { baseUrl: 'http://localhost:1234/v1',    model: 'local-model' },
+  custom:    { baseUrl: '',                              model: '' },
+};
+
+const STORAGE_KEYS = {
+  settings: 'ta_settings_v1',
+  data:     'ta_data_v1',
+  chat:     'ta_chat_v1',
+};
+
+// =====================================================================
+// State
+// =====================================================================
+let state = {
+  settings: { provider: 'agnes', baseUrl: PROVIDERS.agnes.baseUrl, model: PROVIDERS.agnes.model, apiKey: '' },
+  data: [],
+  chat: [],
+};
+
+function loadState() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEYS.settings);
+    if (s) state.settings = { ...state.settings, ...JSON.parse(s) };
+    const d = localStorage.getItem(STORAGE_KEYS.data);
+    if (d) state.data = JSON.parse(d) || [];
+    const c = localStorage.getItem(STORAGE_KEYS.chat);
+    if (c) state.chat = JSON.parse(c) || [];
+  } catch (e) { console.warn('加载状态失败:', e); }
+}
+const saveSettings = () => localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
+const saveData     = () => localStorage.setItem(STORAGE_KEYS.data,     JSON.stringify(state.data));
+const saveChat     = () => localStorage.setItem(STORAGE_KEYS.chat,     JSON.stringify(state.chat));
+
+// =====================================================================
+// Utilities
+// =====================================================================
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  })[c]);
+}
+function formatTime(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// =====================================================================
+// Render
+// =====================================================================
+function renderSettings() {
+  document.getElementById('provider').value  = state.settings.provider;
+  document.getElementById('baseUrl').value    = state.settings.baseUrl;
+  document.getElementById('modelName').value  = state.settings.model;
+  document.getElementById('apiKey').value     = state.settings.apiKey;
+}
+
+function renderChat() {
+  const container = document.getElementById('messages');
+  if (state.chat.length === 0) {
+    container.innerHTML = '<div class="empty-state">点击下方输入框开始对话…</div>';
+    return;
+  }
+  container.innerHTML = state.chat.map(m => {
+    if (m.role === 'user')      return `<div class="msg user">${escapeHtml(m.content)}</div>`;
+    if (m.role === 'assistant') return `<div class="msg assistant">${escapeHtml(m.content)}</div>`;
+    if (m.role === 'error')     return `<div class="msg error">⚠️ ${escapeHtml(m.content)}</div>`;
+    if (m.role === 'thinking')  return `<div class="msg thinking"><span class="thinking-dot"></span><span class="thinking-dot"></span><span class="thinking-dot"></span></div>`;
+    return '';
+  }).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+// 渲染整张数据列表
+// highlightInputId / highlightOutputId 控制哪条卡片/哪个块需要高亮动画
+function renderData(highlightInputId = null, highlightOutputId = null, flyingInIds = []) {
+  const list  = document.getElementById('dataList');
+  const count = document.getElementById('dataCount');
+  count.textContent = state.data.length;
+  if (state.data.length === 0) {
+    list.innerHTML = '<div class="empty-state">还没有训练数据。开始聊天后会自动累积。<br>🖐 卡片拖拽手柄可排序 · 每个面板可单独点 × 删除。<br>点击右上角「导出」可下载为 JSON。</div>';
+    return;
+  }
+  list.innerHTML = state.data.map(item => renderDataItemHtml(item, highlightInputId, highlightOutputId, flyingInIds)).join('');
+  attachDataInteractions();
+}
+
+// 单条卡片的 HTML
+function renderDataItemHtml(item, hlInputId, hlOutputId, flyingInIds) {
+  const classes = ['data-item'];
+  if (item.output == null) classes.push('pending');
+  if (flyingInIds && flyingInIds.includes(item.id)) classes.push('flying-in');
+  if (item.id === hlInputId)  classes.push('input-new');
+  if (item.id === hlOutputId) classes.push('output-new');
+
+  const inputBlock = `
+    <div class="data-block input-block">
+      <div class="data-item-header">
+        <span class="data-item-tag tag-input">input</span>
+        <span>${formatTime(item.timestamp)}</span>
+        <button class="panel-del" data-del-panel="input" data-id="${item.id}" title="删除整条卡片">×</button>
+      </div>
+      <div class="data-item-text">${escapeHtml(item.input)}</div>
+    </div>
+  `;
+
+  // 仅有 input（pending 或 output 被删除）时不渲染 output 面板 —— 等待状态由 API 层动画表达
+  const outputBlock = item.output != null ? `
+    <div class="data-block output-block">
+      <div class="data-item-header">
+        <span class="data-item-tag tag-output">output</span>
+        <span>${formatTime(item.outputTimestamp ?? item.timestamp)}</span>
+        <button class="panel-del" data-del-panel="output" data-id="${item.id}" title="清空 output，仅保留 input">×</button>
+      </div>
+      <div class="data-item-text">${escapeHtml(item.output)}</div>
+    </div>
+  ` : '';
+
+  return `
+    <div class="${classes.join(' ')}" data-id="${item.id}">
+      <div class="card-grip" draggable="true" title="拖拽排序">⠿</div>
+      ${inputBlock}
+      ${outputBlock}
+    </div>
+  `;
+}
+
+// 数据层交互：面板单独删除 + 拖拽排序
+// 用事件委托绑定一次，render 时无需重绑
+let dragId = null;
+let busy  = false;
+
+function attachDataInteractions() {
+  const list = document.getElementById('dataList');
+  if (list.dataset.interactionsBound) return;
+  list.dataset.interactionsBound = '1';
+
+  // —— 面板删除（input = 删整卡；output = 只清空 output，卡片仍可进入上下文）——
+  list.addEventListener('click', e => {
+    if (busy) return;
+    const btn = e.target.closest('[data-del-panel]');
+    if (!btn) return;
+    const id    = btn.dataset.id;
+    const panel = btn.dataset.delPanel;
+    if (panel === 'input') {
+      state.data = state.data.filter(it => it.id !== id);
+    } else if (panel === 'output') {
+      const item = state.data.find(it => it.id === id);
+      if (item) { item.output = null; item.outputTimestamp = null; }
+    }
+    saveData();
+    renderData();
+  });
+
+  // —— 拖拽排序（只允许从 .card-grip 开始拖动）——
+  list.addEventListener('dragstart', e => {
+    const grip = e.target.closest('.card-grip');
+    const card = grip ? grip.closest('.data-item') : null;
+    if (!card || busy) { e.preventDefault(); return; }
+    dragId = card.dataset.id;
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragId);   // Firefox 需要
+    if (card.setDragImage) card.setDragImage(card, 0, 10);
+  });
+
+  list.addEventListener('dragover', e => {
+    const card = e.target.closest('.data-item');
+    if (!card || !dragId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = card.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    list.querySelectorAll('.data-item').forEach(c => {
+      c.classList.remove('drop-before', 'drop-after');
+    });
+    card.classList.add(before ? 'drop-before' : 'drop-after');
+  });
+
+  list.addEventListener('drop', e => {
+    const card = e.target.closest('.data-item');
+    if (!card || !dragId) return;
+    e.preventDefault();
+    const from = state.data.findIndex(it => it.id === dragId);
+    const to   = state.data.findIndex(it => it.id === card.dataset.id);
+    if (from < 0 || to < 0) return;
+    const rect = card.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    const [moved] = state.data.splice(from, 1);
+    let insertAt = to;
+    if (from < to) insertAt--;                          // 删除源后目标索引前移
+    if (!before) insertAt++;                            // 落在下方 → 插到目标之后
+    insertAt = Math.max(0, Math.min(state.data.length, insertAt));
+    state.data.splice(insertAt, 0, moved);
+    dragId = null;
+    saveData();
+    renderData();
+  });
+
+  list.addEventListener('dragend', () => {
+    dragId = null;
+    list.querySelectorAll('.data-item').forEach(c => {
+      c.classList.remove('dragging', 'drop-before', 'drop-after');
+    });
+  });
+}
+
+// 局部更新：给指定 pending 卡片补上 output 块（不重渲染整列，避免其他卡片动画重跑）
+function appendOutputToItem(itemId) {
+  const item = state.data.find(it => it.id === itemId);
+  if (!item) return;
+  const target = document.querySelector(`.data-item[data-id="${itemId}"]`);
+  if (!target) return;
+
+  const outputHtml = `
+    <div class="data-block output-block">
+      <div class="data-item-header">
+        <span class="data-item-tag tag-output">output</span>
+        <span>${formatTime(item.outputTimestamp ?? item.timestamp)}</span>
+        <button class="panel-del" data-del-panel="output" data-id="${item.id}" title="清空 output，仅保留 input">×</button>
+      </div>
+      <div class="data-item-text">${escapeHtml(item.output)}</div>
+    </div>
+  `;
+
+  // pending 卡片只有 input 面板，output 块直接插到 input 块之后
+  // 注意：不在这里加 output-new —— 绿脉冲动画由调用方在小球落地后触发
+  const inputBlock = target.querySelector('.input-block');
+  inputBlock.insertAdjacentHTML('afterend', outputHtml);
+  target.classList.remove('pending');
+}
+
+// 把一段文本从 sourceEl 飞到 targetEl（HTML 气泡 + CSS transform）
+// type: 'input' | 'output'
+function flyText(sourceEl, targetEl, text, type, durMs = 650) {
+  return new Promise(resolve => {
+    if (!text || !sourceEl || !targetEl) { resolve(); return; }
+    const flyer = document.createElement('div');
+    flyer.className = 'text-flyer' + (type === 'output' ? ' output' : '');
+    flyer.textContent = text.length > 30 ? text.slice(0, 30) + '…' : text;
+
+    const sRect = sourceEl.getBoundingClientRect();
+    const tRect = targetEl.getBoundingClientRect();
+    const sx = sRect.left + sRect.width  / 2;
+    const sy = sRect.top  + sRect.height / 2;
+    const ex = tRect.left + tRect.width  / 2;
+    const ey = tRect.top  + tRect.height / 2;
+
+    flyer.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%)`;
+    document.body.appendChild(flyer);
+
+    requestAnimationFrame(() => {
+      const rot = (Math.random() - 0.5) * 10;
+      flyer.style.transition = `transform ${durMs}ms cubic-bezier(0.34, 1.2, 0.64, 1), opacity ${Math.round(durMs * 0.7)}ms ease-in`;
+      flyer.style.transform = `translate(${ex}px, ${ey}px) translate(-50%, -50%) scale(0.5) rotate(${rot}deg)`;
+      flyer.style.opacity = '0';
+    });
+
+    setTimeout(() => {
+      if (flyer.parentNode) flyer.parentNode.removeChild(flyer);
+      resolve();
+    }, durMs);
+  });
+}
+
+// =====================================================================
+// SVG connection paths
+// =====================================================================
+function updateConnectionPaths() {
+  const overlay = document.getElementById('connectionsOverlay');
+  const uiLayer   = document.getElementById('uiLayer');
+  const dataLayer = document.getElementById('dataLayer');
+  const apiLayer  = document.getElementById('apiLayer');
+  if (!uiLayer || !dataLayer || !apiLayer) return;
+
+  const ws = document.querySelector('.workspace').getBoundingClientRect();
+  const ui   = uiLayer.getBoundingClientRect();
+  const data = dataLayer.getBoundingClientRect();
+  const api  = apiLayer.getBoundingClientRect();
+
+  // viewBox 覆盖整个 workspace
+  overlay.setAttribute('viewBox', `0 0 ${ws.width} ${ws.height}`);
+
+  const yMid = (ui.top + ui.bottom) / 2 - ws.top;
+
+  // Path 1: UI 右边 → Data 左边
+  const x1a = ui.right  - ws.left;
+  const x1b = data.left - ws.left;
+  const c1a = x1a + (x1b - x1a) * 0.5;
+  const c1b = x1b - (x1b - x1a) * 0.5;
+  document.getElementById('path1').setAttribute('d',
+    `M ${x1a} ${yMid} C ${c1a} ${yMid}, ${c1b} ${yMid}, ${x1b} ${yMid}`);
+
+  // Path 2: Data 右边 → API 左边
+  const x2a = data.right - ws.left;
+  const x2b = api.left   - ws.left;
+  const c2a = x2a + (x2b - x2a) * 0.5;
+  const c2b = x2b - (x2b - x2a) * 0.5;
+  document.getElementById('path2').setAttribute('d',
+    `M ${x2a} ${yMid} C ${c2a} ${yMid}, ${c2b} ${yMid}, ${x2b} ${yMid}`);
+}
+
+// 在连接线上发射一个滚动小球
+// 返回 Promise，在小球到达终点后 resolve
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// 创建/获取 glow 滤镜（按颜色缓存）
+function ensureGlowFilter(filterId, color) {
+  const overlay = document.getElementById('connectionsOverlay');
+  let defs = overlay.querySelector('defs');
+  if (!defs) {
+    defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    overlay.insertBefore(defs, overlay.firstChild);
+  }
+  if (document.getElementById(filterId)) return;
+
+  const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+  filter.setAttribute('id', filterId);
+  filter.setAttribute('x', '-100%');
+  filter.setAttribute('y', '-100%');
+  filter.setAttribute('width', '300%');
+  filter.setAttribute('height', '300%');
+
+  const blur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
+  blur.setAttribute('stdDeviation', '3.5');
+  blur.setAttribute('result', 'blur');
+
+  const flood = document.createElementNS('http://www.w3.org/2000/svg', 'feFlood');
+  flood.setAttribute('flood-color', color);
+  flood.setAttribute('flood-opacity', '0.85');
+  flood.setAttribute('result', 'c');
+
+  const composite = document.createElementNS('http://www.w3.org/2000/svg', 'feComposite');
+  composite.setAttribute('in', 'c');
+  composite.setAttribute('in2', 'blur');
+  composite.setAttribute('operator', 'in');
+  composite.setAttribute('result', 'glow');
+
+  const merge = document.createElementNS('http://www.w3.org/2000/svg', 'feMerge');
+  const m1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+  m1.setAttribute('in', 'glow');
+  const m2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+  m2.setAttribute('in', 'SourceGraphic');
+  merge.appendChild(m1);
+  merge.appendChild(m2);
+
+  filter.appendChild(blur);
+  filter.appendChild(flood);
+  filter.appendChild(composite);
+  filter.appendChild(merge);
+  defs.appendChild(filter);
+}
+
+// 沿线发射一个滚动小球
+// reverse=true 时沿路径反向滚动（用于"回程"动画）
+function emitBall(groupId, pathId, color, durMs, activeClass, reverse = false) {
+  return new Promise(resolve => {
+    const group = document.getElementById(groupId);
+    const path  = document.getElementById(pathId);
+    const NS    = 'http://www.w3.org/2000/svg';
+
+    const filterId = 'glow-' + color.replace(/[^a-z0-9]/gi, '');
+    ensureGlowFilter(filterId, color);
+
+    const ball = document.createElementNS(NS, 'circle');
+    ball.setAttribute('class', 'ball');
+    ball.setAttribute('r', '9');
+    ball.setAttribute('fill', color);
+    ball.setAttribute('opacity', '0');
+    ball.setAttribute('filter', 'url(#' + filterId + ')');
+
+    const motion = document.createElementNS(NS, 'animateMotion');
+    motion.setAttribute('dur', durMs + 'ms');
+    motion.setAttribute('fill', 'freeze');
+    motion.setAttribute('calcMode', 'linear');
+    if (reverse) {
+      motion.setAttribute('keyPoints', '1;0');
+      motion.setAttribute('keyTimes', '0;1');
+    }
+    const mpath = document.createElementNS(NS, 'mpath');
+    mpath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + pathId);
+    motion.appendChild(mpath);
+
+    const fade = document.createElementNS(NS, 'animate');
+    fade.setAttribute('attributeName', 'opacity');
+    fade.setAttribute('values', '0;1;1;0');
+    fade.setAttribute('keyTimes', '0;0.1;0.9;1');
+    fade.setAttribute('dur', durMs + 'ms');
+    fade.setAttribute('fill', 'freeze');
+
+    ball.appendChild(motion);
+    ball.appendChild(fade);
+    group.appendChild(ball);
+
+    if (activeClass) path.classList.add(activeClass);
+
+    const cleanup = () => {
+      if (activeClass) path.classList.remove(activeClass);
+      if (ball.parentNode) ball.parentNode.removeChild(ball);
+      resolve();
+    };
+    // 用 setTimeout 兜底；SMIL 的 endEvent 偶发不可靠
+    setTimeout(cleanup, durMs);
+  });
+}
+
+// =====================================================================
+// API call (OpenAI-compatible)
+// =====================================================================
+async function callLLM(messages) {
+  const { baseUrl, model, apiKey } = state.settings;
+  if (!baseUrl) throw new Error('请先在右侧设置 Base URL');
+  if (!model)   throw new Error('请先在右侧设置 Model');
+
+  const cleaned = baseUrl.replace(/\/+$/, '');
+  const url = cleaned.endsWith('/chat/completions') ? cleaned : cleaned + '/chat/completions';
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ model, messages, stream: false }),
+  });
+
+  if (!resp.ok) {
+    let detail = '';
+    try { detail = (await resp.json()).error?.message || ''; } catch (_) {}
+    if (!detail) {
+      try { detail = await resp.text(); } catch (_) {}
+    }
+    throw new Error(`HTTP ${resp.status} — ${detail.slice(0, 240) || resp.statusText}`);
+  }
+  const data = await resp.json();
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) throw new Error('响应中没有 choices[0].message.content');
+  return text;
+}
+
+async function testConnection() {
+  const btn = document.getElementById('testConnBtn');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '测试中…';
+  try {
+    await callLLM([{ role: 'user', content: 'Reply with the single word: pong' }]);
+    btn.textContent = '✓ 已连接';
+  } catch (e) {
+    btn.textContent = e.message.includes('Failed to fetch') ? '✗ CORS/网络错误' : '✗ 失败';
+  }
+  setTimeout(() => {
+    btn.textContent = original;
+    btn.disabled = false;
+  }, 2000);
+}
+
+// =====================================================================
+// Event handlers
+// =====================================================================
+
+// Provider 选择
+document.getElementById('provider').addEventListener('change', e => {
+  const v = e.target.value;
+  state.settings.provider = v;
+  if (v !== 'custom') {
+    state.settings.baseUrl = PROVIDERS[v].baseUrl;
+    state.settings.model   = PROVIDERS[v].model;
+  }
+  saveSettings();
+  renderSettings();
+});
+
+// API 输入
+['baseUrl','modelName','apiKey'].forEach(id => {
+  document.getElementById(id).addEventListener('input', e => {
+    const key = id === 'baseUrl' ? 'baseUrl' : id === 'modelName' ? 'model' : 'apiKey';
+    state.settings[key] = e.target.value;
+    saveSettings();
+  });
+});
+
+// API Key 显示切换
+document.getElementById('toggleKeyBtn').addEventListener('click', () => {
+  const input = document.getElementById('apiKey');
+  input.type = input.type === 'password' ? 'text' : 'password';
+});
+
+// 测试连接
+document.getElementById('testConnBtn').addEventListener('click', testConnection);
+
+// 清空对话
+document.getElementById('clearChatBtn').addEventListener('click', () => {
+  if (!confirm('清空当前对话历史？')) return;
+  state.chat = [];
+  saveChat();
+  renderChat();
+});
+
+// 清空数据
+document.getElementById('clearDataBtn').addEventListener('click', () => {
+  if (!confirm(`清空全部 ${state.data.length} 条训练数据？此操作不可撤销。`)) return;
+  state.data = [];
+  saveData();
+  renderData();
+});
+
+// 导出数据
+document.getElementById('exportDataBtn').addEventListener('click', () => {
+  if (state.data.length === 0) { alert('暂无数据可导出'); return; }
+  const json = JSON.stringify(state.data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `teachable-agent-${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+// 发送消息 — 五段串联数据流：UI → Data → API → Data → UI
+async function handleSend(text) {
+  if (busy) return;   // 请求进行中：拖拽/删除/重复发送均 no-op
+  const inputEl = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+  if (!text) return;
+  if (!state.settings.baseUrl || !state.settings.model) {
+    alert('请先在右侧配置 API（至少 Base URL 和 Model 必填）');
+    return;
+  }
+  busy = true;
+
+  // 0. 用户消息入栈
+  state.chat.push({ role: 'user', content: text, timestamp: Date.now() });
+  saveChat();
+  renderChat();
+
+  inputEl.value = '';
+  autoResizeTextarea();
+  inputEl.disabled = true;
+  sendBtn.disabled = true;
+
+  const SEG = 650;    // 单段小球/气泡飞行时长
+  const GAP = 200;
+  const REQ  = '#fbbf24';
+  const RESP = '#10b981';
+
+  // 1. UI → Data （黄球 + input 文本气泡，并行飞向数据层）
+  // 先创建 pending 卡片，但用 flying-in 类藏起来，作为气泡落点
+  const pendingId = uid();
+  state.data.unshift({
+    id: pendingId,
+    input: text,
+    output: null,
+    outputTimestamp: null,
+    timestamp: Date.now(),
+    status: 'pending',
+  });
+  saveData();
+  renderData(null, null, [pendingId]);
+  const dataCard = document.querySelector(`.data-item[data-id="${pendingId}"]`);
+
+  await Promise.all([
+    emitBall('conn1Group', 'path1', REQ, SEG, 'active-req'),
+    flyText(inputEl, dataCard, text, 'input', SEG),
+  ]);
+  // 气泡落地 → 卡片现身 + 紫色脉冲
+  dataCard.classList.remove('flying-in');
+  dataCard.classList.add('input-new');
+  await sleep(GAP);
+
+  // 2. Data → API （黄球，不需要文本气泡）
+  await emitBall('conn2Group', 'path2', REQ, SEG, 'active-req');
+
+  // 3. 真正调用 API —— 等待状态在 API 层呈现（脉动徽章 + 连接线流光）
+  state.chat.push({ role: 'thinking' });
+  renderChat();
+
+  const waitingEl = document.getElementById('apiWaiting');
+  waitingEl.hidden = false;
+  waitingEl.textContent = '等待响应…';
+  document.getElementById('path2').classList.add('active-resp');
+
+  let response;
+  try {
+    // 进入 LLM 上下文的卡片：
+    //   - 有 output       → user/assistant 成对
+    //   - 仅 input（如 output 被删除）→ 单独作为一条 user 消息
+    //   - status === 'pending'（请求进行中）→ 排除，当前消息会单独追加
+    const history = state.data
+      .filter(item => item.status !== 'pending')
+      .reverse()
+      .flatMap(item => {
+        const msgs = [{ role: 'user', content: item.input }];
+        if (item.output != null) msgs.push({ role: 'assistant', content: item.output });
+        return msgs;
+      });
+    const apiMessages = [...history, { role: 'user', content: text }];
+    response = await callLLM(apiMessages);
+  } catch (err) {
+    state.chat = state.chat.filter(m => m.role !== 'thinking');
+    state.chat.push({ role: 'error', content: err.message, timestamp: Date.now() });
+    saveChat();
+    renderChat();
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+    // 恢复 API 层状态
+    document.getElementById('path2').classList.remove('active-resp');
+    waitingEl.hidden = true;
+    busy = false;
+    return;
+  }
+
+  // 清除 thinking
+  state.chat = state.chat.filter(m => m.role !== 'thinking');
+  document.getElementById('path2').classList.remove('active-resp');
+  waitingEl.hidden = true;
+
+  // 4. API → Data （绿球 + output 文本气泡，反向并行）
+  // 先填好 output 块（绿脉冲只由 output-new 类触发），再让气泡从 API 层飞入
+  const idx = state.data.findIndex(it => it.id === pendingId);
+  if (idx >= 0) {
+    state.data[idx].output = response;
+    state.data[idx].outputTimestamp = Date.now();
+    state.data[idx].status = 'complete';
+    saveData();
+    appendOutputToItem(pendingId);
+  }
+  const apiLayerEl = document.getElementById('apiLayer');
+  const outputBlock = document.querySelector(`.data-item[data-id="${pendingId}"] .output-block`);
+  await Promise.all([
+    emitBall('conn2Group', 'path2', RESP, SEG, 'active-resp', true),
+    flyText(apiLayerEl, outputBlock, response, 'output', SEG),
+  ]);
+  // 气泡落地 → 绿脉冲动画（先移除再重加 output-new，强制重放 outputReveal）
+  const card = document.querySelector(`.data-item[data-id="${pendingId}"]`);
+  card.classList.remove('output-new');
+  void card.offsetWidth;
+  card.classList.add('output-new');
+  await sleep(GAP);
+
+  // 5. Data → UI （绿球 + output 文本气泡，反向并行飞回聊天区）
+  // 先把助手消息预渲染但藏起来
+  state.chat.push({ role: 'assistant', content: response, timestamp: Date.now() });
+  saveChat();
+  renderChat();
+  const messagesEl = document.getElementById('messages');
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  const assistantBubbles = messagesEl.querySelectorAll('.msg.assistant');
+  const targetBubble = assistantBubbles[assistantBubbles.length - 1];
+  targetBubble.classList.add('flying-in');
+
+  const updatedOutput = document.querySelector(`.data-item[data-id="${pendingId}"] .output-block`);
+  await Promise.all([
+    emitBall('conn1Group', 'path1', RESP, SEG, 'active-resp', true),
+    flyText(updatedOutput, targetBubble, response, 'output', SEG),
+  ]);
+  // 气泡落地 → 助手消息弹出
+  targetBubble.classList.remove('flying-in');
+  targetBubble.classList.add('landing');
+
+  inputEl.disabled = false;
+  sendBtn.disabled = false;
+  inputEl.focus();
+  busy = false;
+}
+
+document.getElementById('composer').addEventListener('submit', e => {
+  e.preventDefault();
+  const text = document.getElementById('userInput').value.trim();
+  handleSend(text);
+});
+
+// 输入框 Enter 发送 / 自动高度
+function autoResizeTextarea() {
+  const ta = document.getElementById('userInput');
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+}
+document.getElementById('userInput').addEventListener('input', autoResizeTextarea);
+document.getElementById('userInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    document.getElementById('composer').requestSubmit();
+  }
+});
+
+// =====================================================================
+// Init
+// =====================================================================
+loadState();
+renderSettings();
+renderChat();
+renderData();
+
+// 等 layout 稳定再算路径
+requestAnimationFrame(() => {
+  updateConnectionPaths();
+  autoResizeTextarea();
+});
+window.addEventListener('resize', updateConnectionPaths);
+
+// 如果没有 API key，温和提示
+if (!state.settings.apiKey) {
+  console.info('提示：在右侧填入 API Key 后即可开始聊天');
+}
+</script>
+</body>
+</html>
