@@ -398,6 +398,33 @@
   }
   .panel-del:hover { color: #ef4444; background: #fef2f2; }
 
+  /* 面板级置顶按钮（每个面板 header 上，与 × 同行） */
+  .panel-pin {
+    background: transparent;
+    border: none;
+    color: #cbd5e1;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 5px;
+    font-family: inherit;
+    transition: color 0.2s, background 0.2s;
+  }
+  .panel-pin:hover { color: #f59e0b; background: #fef3c7; }
+  .panel-pin.is-pinned {
+    color: #b45309;
+    background: #fef3c7;
+  }
+  .panel-pin.is-pinned:hover { color: #92400e; background: #fde68a; }
+
+  /* 任一面板被置顶的卡片：浅琥珀底 + 琥珀色细边框 */
+  .data-item.card-pinned {
+    background: #fffbeb;
+    border-color: #fde68a;
+  }
+  .data-item.card-pinned:hover { background: #fef3c7; }
+
   /* ============ API Layer ============ */
 
   /* 等待模型响应 —— API 层动画（脉动徽章 + 连接线流光） */
@@ -707,10 +734,14 @@ function renderData(highlightInputId = null, highlightOutputId = null, flyingInI
   const count = document.getElementById('dataCount');
   count.textContent = state.data.length;
   if (state.data.length === 0) {
-    list.innerHTML = '<div class="empty-state">还没有训练数据。开始聊天后会自动累积。<br>🖐 卡片拖拽手柄可排序 · 每个面板可单独点 × 删除。<br>点击右上角「导出」可下载为 JSON。</div>';
+    list.innerHTML = '<div class="empty-state">还没有训练数据。开始聊天后会自动累积。<br>🖐 拖拽手柄可排序 · 每个面板 header 上的 📌 可置顶到列表顶部。<br>× 删除单面板。点击右上角「导出」可下载为 JSON。</div>';
     return;
   }
-  list.innerHTML = state.data.map(item => renderDataItemHtml(item, highlightInputId, highlightOutputId, flyingInIds)).join('');
+  // 渲染顺序：置顶组优先，按 state.data 原顺序排；非置顶组紧随其后
+  const pinned = state.data.filter(it => it.inputPinned || it.outputPinned);
+  const rest   = state.data.filter(it => !it.inputPinned && !it.outputPinned);
+  const ordered = pinned.concat(rest);
+  list.innerHTML = ordered.map(item => renderDataItemHtml(item, highlightInputId, highlightOutputId, flyingInIds)).join('');
   attachDataInteractions();
 }
 
@@ -718,27 +749,34 @@ function renderData(highlightInputId = null, highlightOutputId = null, flyingInI
 function renderDataItemHtml(item, hlInputId, hlOutputId, flyingInIds) {
   const classes = ['data-item'];
   if (item.output == null) classes.push('pending');
+  if (item.inputPinned || item.outputPinned) classes.push('card-pinned');
   if (flyingInIds && flyingInIds.includes(item.id)) classes.push('flying-in');
   if (item.id === hlInputId)  classes.push('input-new');
   if (item.id === hlOutputId) classes.push('output-new');
 
+  const inputPinClass = item.inputPinned ? ' is-pinned' : '';
+  const inputPinTitle = item.inputPinned ? '取消置顶' : '置顶到列表顶部';
   const inputBlock = `
     <div class="data-block input-block">
       <div class="data-item-header">
         <span class="data-item-tag tag-input">input</span>
         <span>${formatTime(item.timestamp)}</span>
+        <button class="panel-pin${inputPinClass}" data-pin-panel="input" data-id="${item.id}" title="${inputPinTitle}">📌</button>
         <button class="panel-del" data-del-panel="input" data-id="${item.id}" title="删除整条卡片">×</button>
       </div>
       <div class="data-item-text">${escapeHtml(item.input)}</div>
     </div>
   `;
 
+  const outputPinClass = item.outputPinned ? ' is-pinned' : '';
+  const outputPinTitle = item.outputPinned ? '取消置顶' : '置顶到列表顶部';
   // 仅有 input（pending 或 output 被删除）时不渲染 output 面板 —— 等待状态由 API 层动画表达
   const outputBlock = item.output != null ? `
     <div class="data-block output-block">
       <div class="data-item-header">
         <span class="data-item-tag tag-output">output</span>
         <span>${formatTime(item.outputTimestamp ?? item.timestamp)}</span>
+        <button class="panel-pin${outputPinClass}" data-pin-panel="output" data-id="${item.id}" title="${outputPinTitle}">📌</button>
         <button class="panel-del" data-del-panel="output" data-id="${item.id}" title="清空 output，仅保留 input">×</button>
       </div>
       <div class="data-item-text">${escapeHtml(item.output)}</div>
@@ -767,6 +805,22 @@ function attachDataInteractions() {
   // —— 面板删除（input = 删整卡；output = 只清空 output，卡片仍可进入上下文）——
   list.addEventListener('click', e => {
     if (busy) return;
+
+    // 面板置顶 toggle —— 卡片任一面板被置顶即浮到列表顶部
+    const pinBtn = e.target.closest('[data-pin-panel]');
+    if (pinBtn) {
+      const id    = pinBtn.dataset.id;
+      const panel = pinBtn.dataset.pinPanel;
+      const item  = state.data.find(it => it.id === id);
+      if (item) {
+        const field = panel === 'input' ? 'inputPinned' : 'outputPinned';
+        item[field] = !item[field];
+        saveData();
+        renderData();
+      }
+      return;
+    }
+
     const btn = e.target.closest('[data-del-panel]');
     if (!btn) return;
     const id    = btn.dataset.id;
@@ -796,6 +850,12 @@ function attachDataInteractions() {
   list.addEventListener('dragover', e => {
     const card = e.target.closest('.data-item');
     if (!card || !dragId) return;
+    // 跨组拖拽（置顶 ↔ 非置顶）直接拒绝 —— 保持两组各自的顺序
+    const fromItem = state.data.find(it => it.id === dragId);
+    const toItem   = state.data.find(it => it.id === card.dataset.id);
+    const fromPinned = !!(fromItem && (fromItem.inputPinned || fromItem.outputPinned));
+    const toPinned   = !!(toItem   && (toItem.inputPinned   || toItem.outputPinned));
+    if (fromPinned !== toPinned) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     const rect = card.getBoundingClientRect();
@@ -813,13 +873,24 @@ function attachDataInteractions() {
     const from = state.data.findIndex(it => it.id === dragId);
     const to   = state.data.findIndex(it => it.id === card.dataset.id);
     if (from < 0 || to < 0) return;
+    const movedPinned = !!(state.data[from].inputPinned || state.data[from].outputPinned);
     const rect = card.getBoundingClientRect();
     const before = e.clientY < rect.top + rect.height / 2;
     const [moved] = state.data.splice(from, 1);
     let insertAt = to;
     if (from < to) insertAt--;                          // 删除源后目标索引前移
     if (!before) insertAt++;                            // 落在下方 → 插到目标之后
-    insertAt = Math.max(0, Math.min(state.data.length, insertAt));
+    // 钳位到源卡片所属组（置顶 vs 非置顶），跨组移动会被压回原区域
+    let lastPinnedIdx = -1;
+    for (let i = state.data.length - 1; i >= 0; i--) {
+      const it = state.data[i];
+      if (it.inputPinned || it.outputPinned) { lastPinnedIdx = i; break; }
+    }
+    if (movedPinned) {
+      insertAt = Math.max(0, Math.min(lastPinnedIdx + 1, insertAt));
+    } else {
+      insertAt = Math.max(lastPinnedIdx + 1, Math.min(state.data.length, insertAt));
+    }
     state.data.splice(insertAt, 0, moved);
     dragId = null;
     saveData();
@@ -841,11 +912,14 @@ function appendOutputToItem(itemId) {
   const target = document.querySelector(`.data-item[data-id="${itemId}"]`);
   if (!target) return;
 
+  const outputPinClass = item.outputPinned ? ' is-pinned' : '';
+  const outputPinTitle = item.outputPinned ? '取消置顶' : '置顶到列表顶部';
   const outputHtml = `
     <div class="data-block output-block">
       <div class="data-item-header">
         <span class="data-item-tag tag-output">output</span>
         <span>${formatTime(item.outputTimestamp ?? item.timestamp)}</span>
+        <button class="panel-pin${outputPinClass}" data-pin-panel="output" data-id="${item.id}" title="${outputPinTitle}">📌</button>
         <button class="panel-del" data-del-panel="output" data-id="${item.id}" title="清空 output，仅保留 input">×</button>
       </div>
       <div class="data-item-text">${escapeHtml(item.output)}</div>
