@@ -927,6 +927,25 @@
 //# sourceMappingURL=purify.min.js.map
 
 </script>
+
+<!-- ============ 项目管理模态框（必须放在 <script> 之前，让监听器能找到这些元素） ============ -->
+<div id="projectModal" class="modal" hidden>
+  <div class="modal-backdrop" id="projectModalBackdrop"></div>
+  <div class="modal-panel">
+    <div class="modal-header">
+      <h3>项目管理</h3>
+      <button class="modal-close" id="closeProjectModal" title="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-new-row">
+        <input type="text" id="newProjectName" placeholder="新项目名称（留空使用默认命名）" />
+        <button class="primary-btn" id="createProjectBtn">新建</button>
+      </div>
+      <ul class="project-list" id="projectList"></ul>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -2075,24 +2094,6 @@ if (!state.settings.apiKey) {
   console.info('提示：在右侧填入 API Key 后即可开始聊天');
 }
 </script>
-
-<!-- ============ 项目管理模态框 ============ -->
-<div id="projectModal" class="modal" hidden>
-  <div class="modal-backdrop" id="projectModalBackdrop"></div>
-  <div class="modal-panel">
-    <div class="modal-header">
-      <h3>项目管理</h3>
-      <button class="modal-close" id="closeProjectModal" title="关闭">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="modal-new-row">
-        <input type="text" id="newProjectName" placeholder="新项目名称（留空使用默认命名）" />
-        <button class="primary-btn" id="createProjectBtn">新建</button>
-      </div>
-      <ul class="project-list" id="projectList"></ul>
-    </div>
-  </div>
-</div>
 
 </body>
 </html>
