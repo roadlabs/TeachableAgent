@@ -781,16 +781,67 @@
   .project-actions .ghost-btn { padding: 4px 8px; font-size: 11px; }
 
   /* Responsive */
+  .mobile-tabs { display: none; }   /* 默认隐藏 —— 桌面端不显示 */
+
+  @media (min-width: 1101px) {
+    /* 桌面端：tab 隐藏，所有 layer 默认可见 */
+    .layer { display: flex; }
+  }
 
   @media (max-width: 1100px) {
+    /* 移动端：单列布局 + tab 切换层 */
     .workspace {
       grid-template-columns: 1fr;
-      gap: 16px;
-      padding: 16px;
+      gap: 12px;
+      padding: 12px;
     }
     .connections-overlay { display: none; }
-    .layer { min-height: 480px; }
-    .app-header { padding: 16px 16px 8px; }
+    .layer { display: none; min-height: 60vh; }
+    .layer.active-mobile { display: flex; }
+    .app-header { padding: 14px 14px 6px; }
+    .app-header-title h1 { font-size: 22px; }
+    .app-header .subtitle { font-size: 12px; }
+    .badge { font-size: 10px; padding: 2px 6px; }
+
+    /* 顶部 tab 栏 */
+    .mobile-tabs {
+      display: flex;
+      gap: 4px;
+      background: #fff;
+      padding: 4px;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .mobile-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 10px 6px;
+      background: transparent;
+      border: none;
+      font-size: 13px;
+      color: #6b7280;
+      cursor: pointer;
+      border-radius: 8px;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s;
+      min-width: 0;
+    }
+    .mobile-tab:hover { color: #1f2937; }
+    .mobile-tab.active {
+      background: linear-gradient(135deg, #6366f1, #818cf8);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(99,102,241,0.3);
+    }
+  }
+
+  @media (max-width: 480px) {
+    /* 超窄屏：tab 文字只显示 emoji */
+    .mobile-tab-label { display: none; }
+    .mobile-tab { font-size: 18px; padding: 12px 6px; }
   }
 </style>
 <style>
@@ -816,8 +867,21 @@
 
 <main class="workspace">
 
+  <!-- ===== Mobile Tab Bar (only shown ≤1100px) ===== -->
+  <div class="mobile-tabs" id="mobileTabs">
+    <button class="mobile-tab active" data-target="uiLayer" type="button">
+      <span class="mobile-tab-icon">💬</span><span class="mobile-tab-label">界面</span>
+    </button>
+    <button class="mobile-tab" data-target="dataLayer" type="button">
+      <span class="mobile-tab-icon">📚</span><span class="mobile-tab-label">数据</span>
+    </button>
+    <button class="mobile-tab" data-target="apiLayer" type="button">
+      <span class="mobile-tab-icon">🔌</span><span class="mobile-tab-label">接口</span>
+    </button>
+  </div>
+
   <!-- ===== UI Layer ===== -->
-  <section class="layer ui-layer" id="uiLayer">
+  <section class="layer ui-layer active-mobile" id="uiLayer">
     <div class="layer-header">
       <span class="layer-icon">💬</span>
       <h2>用户界面</h2>
@@ -1821,6 +1885,25 @@ document.getElementById('messages').addEventListener('click', e => {
   widget.querySelectorAll('.html-preview-tab').forEach(t => {
     t.classList.toggle('active', t === tab);
   });
+});
+
+// ============ 移动端 tab 切换（≤1100px 生效） ============
+document.getElementById('mobileTabs').addEventListener('click', e => {
+  const tab = e.target.closest('.mobile-tab');
+  if (!tab) return;
+  const targetId = tab.dataset.target;
+  document.querySelectorAll('.mobile-tab').forEach(t => {
+    t.classList.toggle('active', t === tab);
+  });
+  document.querySelectorAll('.layer').forEach(l => {
+    l.classList.toggle('active-mobile', l.id === targetId);
+  });
+  // 切换后把 workspace 滚到视口顶部，避免被 tab 自身覆盖
+  const ws = document.querySelector('.workspace');
+  if (ws) {
+    const rect = ws.getBoundingClientRect();
+    if (rect.top < 0) ws.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 });
 
 // ============ 项目管理 事件 ============
