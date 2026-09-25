@@ -250,8 +250,8 @@ function appendOutputToItem(itemId) {
 function updateSortButton() {
   const btn = document.getElementById('sortBtn');
   if (!btn) return;
-  btn.textContent = sortDescending ? '↓ 最新在上' : '↑ 最早在上';
+  btn.textContent = sortDescending ? '↓ 降序' : '↑ 升序';
   btn.title = sortDescending
-    ? '当前：最新在上。点击切换到「最早在上」'
-    : '当前：最早在上。点击切换到「最新在上」';
+    ? '当前：降序（最新在上）。点击切换到「升序」'
+    : '当前：升序（最早在上）。点击切换到「降序」';
 }

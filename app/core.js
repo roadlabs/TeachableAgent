@@ -32,7 +32,7 @@ let state = {
 };
 
 // 视图偏好（不属于项目数据，跨项目共享用户偏好；不放进 state 对象）
-let sortDescending = true;   // 默认最新在上
+let sortDescending = true;   // 默认降序（最新在上）
 
 function loadState() {
   // settings 仍走 localStorage；data / chat 由 initProjects() 从 IndexedDB 加载
@@ -40,7 +40,7 @@ function loadState() {
     const s = localStorage.getItem(STORAGE_KEYS.settings);
     if (s) state.settings = { ...state.settings, ...JSON.parse(s) };
     const sd = localStorage.getItem(STORAGE_KEYS.sortDescending);
-    // 显式 'false' 才视为「最早在上」；缺失或 'true' 视为默认「最新在上」
+    // 显式 'false' 才视为「升序（最早在上）」；缺失或 'true' 视为默认「降序（最新在上）」
     sortDescending = sd !== 'false';
   } catch (e) { console.warn('加载设置失败:', e); }
 }
