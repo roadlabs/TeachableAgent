@@ -660,6 +660,119 @@
   .html-preview[data-state="preview"] .html-source { display: none; }
   .html-preview[data-state="code"]    .html-frame  { display: none; }
 
+  /* ============ 项目管理模态框 ============ */
+  #projectBtn { font-weight: 500; }
+  #projectName { font-weight: 600; color: #1f2937; }
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal[hidden] { display: none; }
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .modal-panel {
+    position: relative;
+    background: #fff;
+    border-radius: 14px;
+    width: min(520px, calc(100vw - 40px));
+    max-height: 80vh;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modalIn 0.2s ease-out;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .modal-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid #f1f3f7;
+    display: flex;
+    align-items: center;
+  }
+  .modal-header h3 { flex: 1; font-size: 15px; font-weight: 600; }
+  .modal-close {
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-family: inherit;
+  }
+  .modal-close:hover { color: #1f2937; background: #f3f4f6; }
+  .modal-body { padding: 16px 18px; overflow-y: auto; }
+  .modal-new-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .modal-new-row input {
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    color: #1f2937;
+    transition: border-color 0.15s;
+  }
+  .modal-new-row input:focus { border-color: #6366f1; }
+  .modal-new-row button { padding: 8px 14px; font-size: 13px; }
+
+  /* 项目列表 */
+  .project-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .project-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid #eef0f4;
+    border-radius: 10px;
+    background: #fafbfc;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .project-item:hover { background: #fff; border-color: #e5e7eb; }
+  .project-item.active {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+  }
+  .project-item.active .project-name { color: #4338ca; }
+  .project-info { flex: 1; min-width: 0; }
+  .project-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .project-meta { font-size: 11px; color: #9ca3af; }
+  .project-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .project-actions .ghost-btn { padding: 4px 8px; font-size: 11px; }
+
   /* Responsive */
 
   @media (max-width: 1100px) {
@@ -715,6 +828,7 @@
       <span class="layer-icon">📚</span>
       <h2>数据存储</h2>
       <span class="counter" id="dataCount">0</span>
+      <button class="ghost-btn" id="projectBtn" title="管理项目">📁 <span id="projectName">默认项目</span></button>
       <div class="layer-actions">
         <button class="ghost-btn" id="exportDataBtn">导出 JSON</button>
         <button class="ghost-btn danger" id="clearDataBtn">清空</button>
@@ -836,27 +950,242 @@ let state = {
 };
 
 function loadState() {
+  // settings 仍走 localStorage；data / chat 由 initProjects() 从 IndexedDB 加载
   try {
     const s = localStorage.getItem(STORAGE_KEYS.settings);
     if (s) state.settings = { ...state.settings, ...JSON.parse(s) };
-    const d = localStorage.getItem(STORAGE_KEYS.data);
-    if (d) {
-      const parsed = JSON.parse(d) || [];
-      // 迁移旧版 inputPinned/outputPinned → 单一 pinned 字段
-      state.data = parsed.map(it => {
-        it.pinned = it.pinned ?? !!(it.inputPinned || it.outputPinned);
-        delete it.inputPinned;
-        delete it.outputPinned;
-        return it;
-      });
-    }
-    const c = localStorage.getItem(STORAGE_KEYS.chat);
-    if (c) state.chat = JSON.parse(c) || [];
-  } catch (e) { console.warn('加载状态失败:', e); }
+  } catch (e) { console.warn('加载设置失败:', e); }
+}
+
+// 旧版 localStorage 数据迁移：inputPinned/outputPinned → 单一 pinned 字段
+// 仍在用旧版字段的项目初始化时会调用一次
+function migrateItemPinning(items) {
+  return (items || []).map(it => {
+    it.pinned = it.pinned ?? !!(it.inputPinned || it.outputPinned);
+    delete it.inputPinned;
+    delete it.outputPinned;
+    return it;
+  });
 }
 const saveSettings = () => localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
-const saveData     = () => localStorage.setItem(STORAGE_KEYS.data,     JSON.stringify(state.data));
-const saveChat     = () => localStorage.setItem(STORAGE_KEYS.chat,     JSON.stringify(state.chat));
+const saveData     = () => { localStorage.setItem(STORAGE_KEYS.data, JSON.stringify(state.data)); persistCurrentProject(); };
+const saveChat     = () => { localStorage.setItem(STORAGE_KEYS.chat, JSON.stringify(state.chat)); persistCurrentProject(); };
+
+// =====================================================================
+// 项目管理 —— IndexedDB
+//   项目 = { id, name, createdAt, updatedAt, data, chat }
+//   settings 不属于项目，保留在 localStorage 跨项目共享
+//   当前项目 id 存 localStorage (ta_current_project_v1)
+// =====================================================================
+const IDB_NAME    = 'TeachableAgent';
+const IDB_VERSION = 1;
+const IDB_STORE   = 'projects';
+
+let _dbPromise = null;
+function openDb() {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(IDB_STORE)) {
+        d.createObjectStore(IDB_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = e => reject(e.target.error);
+  });
+  return _dbPromise;
+}
+async function dbAllProjects() {
+  const d = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror   = () => reject(req.error);
+  });
+}
+async function dbPutProject(p) {
+  const d = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(p);
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+async function dbDeleteProject(id) {
+  const d = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+
+// 当前项目状态
+let currentProjectId   = null;
+let currentProjectMeta = null; // { id, name, createdAt, updatedAt }
+
+// 防抖写入 IDB —— 200ms 内连续变更合并为一次 put
+let _saveProjectTimer = null;
+function persistCurrentProject() {
+  if (!currentProjectId) return;
+  clearTimeout(_saveProjectTimer);
+  _saveProjectTimer = setTimeout(() => {
+    _saveProjectTimer = null;
+    flushCurrentProject().catch(e => console.warn('保存项目失败:', e));
+  }, 200);
+}
+async function flushCurrentProject() {
+  if (!currentProjectId) return;
+  if (_saveProjectTimer) { clearTimeout(_saveProjectTimer); _saveProjectTimer = null; }
+  await dbPutProject({
+    id: currentProjectId,
+    name: currentProjectMeta.name,
+    createdAt: currentProjectMeta.createdAt,
+    updatedAt: Date.now(),
+    data: state.data,
+    chat: state.chat,
+  });
+  currentProjectMeta.updatedAt = Date.now();
+}
+
+function updateProjectIndicator() {
+  const el = document.getElementById('projectName');
+  if (el) el.textContent = currentProjectMeta?.name || '默认项目';
+}
+
+async function createProject(name) {
+  const id  = uid();
+  const now = Date.now();
+  // 先写盘再切 —— 避免 IDB 写入失败时 state 进入未保存状态
+  await dbPutProject({ id, name, createdAt: now, updatedAt: now, data: [], chat: [] });
+  currentProjectId   = id;
+  currentProjectMeta = { id, name, createdAt: now, updatedAt: now };
+  state.data = [];
+  state.chat = [];
+  localStorage.setItem('ta_current_project_v1', id);
+  saveData(); saveChat();
+  updateProjectIndicator();
+}
+
+async function switchProject(id) {
+  if (id === currentProjectId || busy) return;
+  // 切走前 flush 当前未保存的变更
+  await flushCurrentProject();
+  const projects = await dbAllProjects();
+  const p = projects.find(it => it.id === id);
+  if (!p) return;
+  currentProjectId   = p.id;
+  currentProjectMeta = { id: p.id, name: p.name, createdAt: p.createdAt, updatedAt: p.updatedAt };
+  state.data = p.data || [];
+  state.chat = p.chat || [];
+  localStorage.setItem('ta_current_project_v1', p.id);
+  saveData(); saveChat();
+  renderChat();
+  renderData();
+  updateProjectIndicator();
+}
+
+async function renameProject(id, newName) {
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+  const projects = await dbAllProjects();
+  const p = projects.find(it => it.id === id);
+  if (!p) return;
+  p.name = trimmed;
+  p.updatedAt = Date.now();
+  await dbPutProject(p);
+  if (id === currentProjectId) {
+    currentProjectMeta.name = trimmed;
+    updateProjectIndicator();
+  }
+}
+
+async function deleteProject(id) {
+  if (busy) return;
+  await dbDeleteProject(id);
+  if (id === currentProjectId) {
+    const remaining = await dbAllProjects();
+    if (remaining.length > 0) {
+      await switchProject(remaining[0].id);
+    } else {
+      await createProject('默认项目');
+    }
+  }
+}
+
+async function renderProjectList() {
+  const list = document.getElementById('projectList');
+  if (!list) return;
+  const projects = (await dbAllProjects()).sort((a, b) => b.updatedAt - a.updatedAt);
+  if (projects.length === 0) {
+    list.innerHTML = '<li class="empty-state" style="padding:20px">暂无项目。上面输入名称后点「新建」创建。</li>';
+    return;
+  }
+  list.innerHTML = projects.map(p => {
+    const active = p.id === currentProjectId;
+    const dataCount = (p.data || []).length;
+    const chatCount = (p.chat || []).filter(m => m.role !== 'thinking').length;
+    return `
+      <li class="project-item${active ? ' active' : ''}" data-pid="${p.id}">
+        <div class="project-info">
+          <div class="project-name">${escapeHtml(p.name)}${active ? ' <span style="font-size:11px;color:#6366f1">(当前)</span>' : ''}</div>
+          <div class="project-meta">${dataCount} 条卡片 · ${chatCount} 条消息 · 更新于 ${formatTime(p.updatedAt)}</div>
+        </div>
+        <div class="project-actions">
+          <button class="ghost-btn" data-open="${p.id}">${active ? '已打开' : '打开'}</button>
+          <button class="ghost-btn" data-rename="${p.id}">重命名</button>
+          <button class="ghost-btn danger" data-delete="${p.id}">删除</button>
+        </div>
+      </li>
+    `;
+  }).join('');
+}
+
+async function openProjectModal() {
+  await renderProjectList();
+  document.getElementById('projectModal').hidden = false;
+}
+function closeProjectModal() {
+  document.getElementById('projectModal').hidden = true;
+}
+
+async function initProjects() {
+  try {
+    await openDb();
+    let projects = await dbAllProjects();
+
+    // 迁移：localStorage 里有旧数据但 IDB 空 → 包成默认项目一次性导入
+    if (projects.length === 0) {
+      const lsData = JSON.parse(localStorage.getItem(STORAGE_KEYS.data) || '[]');
+      const lsChat = JSON.parse(localStorage.getItem(STORAGE_KEYS.chat) || '[]');
+      const migrated = migrateItemPinning(lsData);
+      const now = Date.now();
+      await dbPutProject({
+        id: uid(), name: '默认项目', createdAt: now, updatedAt: now,
+        data: migrated, chat: lsChat,
+      });
+      projects = await dbAllProjects();
+    }
+
+    // 选回上次打开的项目，否则第一个
+    const savedId = localStorage.getItem('ta_current_project_v1');
+    const target  = projects.find(it => it.id === savedId) || projects[0];
+    currentProjectId   = target.id;
+    currentProjectMeta = { id: target.id, name: target.name, createdAt: target.createdAt, updatedAt: target.updatedAt };
+    state.data = target.data || [];
+    state.chat = target.chat || [];
+    localStorage.setItem('ta_current_project_v1', target.id);
+    saveData(); saveChat();
+  } catch (e) {
+    console.warn('项目初始化失败:', e);
+  }
+  updateProjectIndicator();
+}
 
 // =====================================================================
 // Utilities
@@ -1432,6 +1761,47 @@ document.getElementById('messages').addEventListener('click', e => {
   });
 });
 
+// ============ 项目管理 事件 ============
+document.getElementById('projectBtn').addEventListener('click', openProjectModal);
+document.getElementById('closeProjectModal').addEventListener('click', closeProjectModal);
+document.getElementById('projectModalBackdrop').addEventListener('click', closeProjectModal);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !document.getElementById('projectModal').hidden) closeProjectModal();
+});
+
+document.getElementById('createProjectBtn').addEventListener('click', async () => {
+  const input = document.getElementById('newProjectName');
+  const name  = input.value.trim() || `项目 ${new Date().toLocaleString('zh-CN')}`;
+  input.value = '';
+  await createProject(name);
+  await renderProjectList();
+});
+
+// 项目列表操作 —— 委托到 #projectList
+document.getElementById('projectList').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-open], button[data-rename], button[data-delete]');
+  if (!btn) return;
+  const id = btn.dataset.open || btn.dataset.rename || btn.dataset.delete;
+  if (btn.dataset.open) {
+    await switchProject(id);
+    await renderProjectList();
+  } else if (btn.dataset.rename) {
+    const projects = await dbAllProjects();
+    const p = projects.find(it => it.id === id);
+    const newName = prompt('重命名项目', p?.name || '');
+    if (newName != null && newName.trim()) {
+      await renameProject(id, newName);
+      await renderProjectList();
+    }
+  } else if (btn.dataset.delete) {
+    const projects = await dbAllProjects();
+    const p = projects.find(it => it.id === id);
+    if (!confirm(`删除项目「${p?.name || ''}」？此操作不可撤销。`)) return;
+    await deleteProject(id);
+    await renderProjectList();
+  }
+});
+
 // 清空对话
 document.getElementById('clearChatBtn').addEventListener('click', () => {
   if (!confirm('清空当前对话历史？')) return;
@@ -1641,8 +2011,14 @@ document.getElementById('userInput').addEventListener('keydown', e => {
 // =====================================================================
 loadState();
 renderSettings();
-renderChat();
-renderData();
+
+// 异步：从 IndexedDB 加载当前项目（settings 走 localStorage 是同步的，
+// data/chat 走 IDB 是异步的，必须先 await 再渲染）
+(async () => {
+  await initProjects();
+  renderChat();
+  renderData();
+})();
 
 // 等 layout 稳定再算路径
 requestAnimationFrame(() => {
@@ -1656,5 +2032,24 @@ if (!state.settings.apiKey) {
   console.info('提示：在右侧填入 API Key 后即可开始聊天');
 }
 </script>
+
+<!-- ============ 项目管理模态框 ============ -->
+<div id="projectModal" class="modal" hidden>
+  <div class="modal-backdrop" id="projectModalBackdrop"></div>
+  <div class="modal-panel">
+    <div class="modal-header">
+      <h3>项目管理</h3>
+      <button class="modal-close" id="closeProjectModal" title="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-new-row">
+        <input type="text" id="newProjectName" placeholder="新项目名称（留空使用默认命名）" />
+        <button class="primary-btn" id="createProjectBtn">新建</button>
+      </div>
+      <ul class="project-list" id="projectList"></ul>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
