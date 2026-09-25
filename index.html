@@ -671,7 +671,16 @@ function loadState() {
     const s = localStorage.getItem(STORAGE_KEYS.settings);
     if (s) state.settings = { ...state.settings, ...JSON.parse(s) };
     const d = localStorage.getItem(STORAGE_KEYS.data);
-    if (d) state.data = JSON.parse(d) || [];
+    if (d) {
+      const parsed = JSON.parse(d) || [];
+      // 迁移旧版 inputPinned/outputPinned → 单一 pinned 字段
+      state.data = parsed.map(it => {
+        it.pinned = it.pinned ?? !!(it.inputPinned || it.outputPinned);
+        delete it.inputPinned;
+        delete it.outputPinned;
+        return it;
+      });
+    }
     const c = localStorage.getItem(STORAGE_KEYS.chat);
     if (c) state.chat = JSON.parse(c) || [];
   } catch (e) { console.warn('加载状态失败:', e); }
@@ -738,8 +747,8 @@ function renderData(highlightInputId = null, highlightOutputId = null, flyingInI
     return;
   }
   // 渲染顺序：置顶组优先，按 state.data 原顺序排；非置顶组紧随其后
-  const pinned = state.data.filter(it => it.inputPinned || it.outputPinned);
-  const rest   = state.data.filter(it => !it.inputPinned && !it.outputPinned);
+  const pinned = state.data.filter(it => it.pinned);
+  const rest   = state.data.filter(it => !it.pinned);
   const ordered = pinned.concat(rest);
   list.innerHTML = ordered.map(item => renderDataItemHtml(item, highlightInputId, highlightOutputId, flyingInIds)).join('');
   attachDataInteractions();
@@ -749,34 +758,32 @@ function renderData(highlightInputId = null, highlightOutputId = null, flyingInI
 function renderDataItemHtml(item, hlInputId, hlOutputId, flyingInIds) {
   const classes = ['data-item'];
   if (item.output == null) classes.push('pending');
-  if (item.inputPinned || item.outputPinned) classes.push('card-pinned');
+  if (item.pinned) classes.push('card-pinned');
   if (flyingInIds && flyingInIds.includes(item.id)) classes.push('flying-in');
   if (item.id === hlInputId)  classes.push('input-new');
   if (item.id === hlOutputId) classes.push('output-new');
 
-  const inputPinClass = item.inputPinned ? ' is-pinned' : '';
-  const inputPinTitle = item.inputPinned ? '取消置顶' : '置顶到列表顶部';
+  const pinClass = item.pinned ? ' is-pinned' : '';
+  const pinTitle = item.pinned ? '取消置顶' : '置顶到列表顶部';
+  const pinIcon  = item.pinned ? '📌' : '📍';
   const inputBlock = `
     <div class="data-block input-block">
       <div class="data-item-header">
         <span class="data-item-tag tag-input">input</span>
         <span>${formatTime(item.timestamp)}</span>
-        <button class="panel-pin${inputPinClass}" data-pin-panel="input" data-id="${item.id}" title="${inputPinTitle}">📌</button>
+        <button class="panel-pin${pinClass}" data-pin="1" data-id="${item.id}" title="${pinTitle}">${pinIcon}</button>
         <button class="panel-del" data-del-panel="input" data-id="${item.id}" title="删除整条卡片">×</button>
       </div>
       <div class="data-item-text">${escapeHtml(item.input)}</div>
     </div>
   `;
 
-  const outputPinClass = item.outputPinned ? ' is-pinned' : '';
-  const outputPinTitle = item.outputPinned ? '取消置顶' : '置顶到列表顶部';
   // 仅有 input（pending 或 output 被删除）时不渲染 output 面板 —— 等待状态由 API 层动画表达
   const outputBlock = item.output != null ? `
     <div class="data-block output-block">
       <div class="data-item-header">
         <span class="data-item-tag tag-output">output</span>
         <span>${formatTime(item.outputTimestamp ?? item.timestamp)}</span>
-        <button class="panel-pin${outputPinClass}" data-pin-panel="output" data-id="${item.id}" title="${outputPinTitle}">📌</button>
         <button class="panel-del" data-del-panel="output" data-id="${item.id}" title="清空 output，仅保留 input">×</button>
       </div>
       <div class="data-item-text">${escapeHtml(item.output)}</div>
@@ -806,15 +813,12 @@ function attachDataInteractions() {
   list.addEventListener('click', e => {
     if (busy) return;
 
-    // 面板置顶 toggle —— 卡片任一面板被置顶即浮到列表顶部
-    const pinBtn = e.target.closest('[data-pin-panel]');
+    // 卡片置顶 toggle —— pinned=true 时整张卡片浮到列表顶部
+    const pinBtn = e.target.closest('[data-pin]');
     if (pinBtn) {
-      const id    = pinBtn.dataset.id;
-      const panel = pinBtn.dataset.pinPanel;
-      const item  = state.data.find(it => it.id === id);
+      const item = state.data.find(it => it.id === pinBtn.dataset.id);
       if (item) {
-        const field = panel === 'input' ? 'inputPinned' : 'outputPinned';
-        item[field] = !item[field];
+        item.pinned = !item.pinned;
         saveData();
         renderData();
       }
@@ -853,8 +857,8 @@ function attachDataInteractions() {
     // 跨组拖拽（置顶 ↔ 非置顶）直接拒绝 —— 保持两组各自的顺序
     const fromItem = state.data.find(it => it.id === dragId);
     const toItem   = state.data.find(it => it.id === card.dataset.id);
-    const fromPinned = !!(fromItem && (fromItem.inputPinned || fromItem.outputPinned));
-    const toPinned   = !!(toItem   && (toItem.inputPinned   || toItem.outputPinned));
+    const fromPinned = !!(fromItem && fromItem.pinned);
+    const toPinned   = !!(toItem   && toItem.pinned);
     if (fromPinned !== toPinned) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -873,7 +877,7 @@ function attachDataInteractions() {
     const from = state.data.findIndex(it => it.id === dragId);
     const to   = state.data.findIndex(it => it.id === card.dataset.id);
     if (from < 0 || to < 0) return;
-    const movedPinned = !!(state.data[from].inputPinned || state.data[from].outputPinned);
+    const movedPinned = !!state.data[from].pinned;
     const rect = card.getBoundingClientRect();
     const before = e.clientY < rect.top + rect.height / 2;
     const [moved] = state.data.splice(from, 1);
@@ -883,8 +887,7 @@ function attachDataInteractions() {
     // 钳位到源卡片所属组（置顶 vs 非置顶），跨组移动会被压回原区域
     let lastPinnedIdx = -1;
     for (let i = state.data.length - 1; i >= 0; i--) {
-      const it = state.data[i];
-      if (it.inputPinned || it.outputPinned) { lastPinnedIdx = i; break; }
+      if (state.data[i].pinned) { lastPinnedIdx = i; break; }
     }
     if (movedPinned) {
       insertAt = Math.max(0, Math.min(lastPinnedIdx + 1, insertAt));
@@ -912,14 +915,11 @@ function appendOutputToItem(itemId) {
   const target = document.querySelector(`.data-item[data-id="${itemId}"]`);
   if (!target) return;
 
-  const outputPinClass = item.outputPinned ? ' is-pinned' : '';
-  const outputPinTitle = item.outputPinned ? '取消置顶' : '置顶到列表顶部';
   const outputHtml = `
     <div class="data-block output-block">
       <div class="data-item-header">
         <span class="data-item-tag tag-output">output</span>
         <span>${formatTime(item.outputTimestamp ?? item.timestamp)}</span>
-        <button class="panel-pin${outputPinClass}" data-pin-panel="output" data-id="${item.id}" title="${outputPinTitle}">📌</button>
         <button class="panel-del" data-del-panel="output" data-id="${item.id}" title="清空 output，仅保留 input">×</button>
       </div>
       <div class="data-item-text">${escapeHtml(item.output)}</div>
