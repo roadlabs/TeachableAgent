@@ -591,6 +591,75 @@
     padding: 2px 0;
   }
 
+  /* ============ HTML 代码块预览切换 ============ */
+  .html-preview {
+    margin: 6px 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .html-preview-tabs {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: #f3f4f6;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 11px;
+  }
+  .html-preview-lang {
+    font-weight: 700;
+    color: #f59e0b;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .html-preview-tabs-right { display: flex; gap: 2px; }
+  .html-preview-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #6b7280;
+    padding: 2px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .html-preview-tab:hover { background: #e5e7eb; }
+  .html-preview-tab.active {
+    background: #fff;
+    color: #6366f1;
+    border-color: #c7d2fe;
+  }
+  .html-preview-body { background: #1f2937; }
+  .html-source {
+    margin: 0;
+    padding: 10px 14px;
+    color: #f3f4f6;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .html-source code {
+    font-family: inherit;
+    font-size: inherit;
+    background: transparent;
+    color: inherit;
+    padding: 0;
+  }
+  .html-frame {
+    width: 100%;
+    height: 240px;
+    border: 0;
+    background: #fff;
+    display: block;
+  }
+  .html-preview[data-state="preview"] .html-source { display: none; }
+  .html-preview[data-state="code"]    .html-frame  { display: none; }
+
   /* Responsive */
 
   @media (max-width: 1100px) {
@@ -830,6 +899,42 @@ function renderAssistantHtml(text) {
   return DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
 }
 
+// HTML 实体反转义 —— marked 把 ```html 块里的 < > 编码成 &lt; &gt;
+// 这里反解回来拿到原始 HTML 字符串，供 srcdoc 和预览面板使用
+function decodeHtmlEntities(s) {
+  const tmp = document.createElement('textarea');
+  tmp.innerHTML = s;
+  return tmp.value;
+}
+
+// HTML 代码块增强：把 <pre><code class="language-html"> 替换为带 tab 切换的
+// 「代码 / 预览」widget。预览面板用最严格沙箱的 iframe (sandbox="" 无任何
+// allow-*) —— LLM 输出的 <script>、事件处理器、form 提交、跨源请求全部失效
+function enhanceHtmlCodeBlocks(container) {
+  const blocks = container.querySelectorAll('pre > code.language-html');
+  blocks.forEach(codeEl => {
+    const pre = codeEl.parentElement;
+    const html = decodeHtmlEntities(codeEl.textContent);
+    const wrap = document.createElement('div');
+    wrap.className = 'html-preview';
+    wrap.setAttribute('data-state', 'code');
+    wrap.innerHTML = `
+      <div class="html-preview-tabs">
+        <span class="html-preview-lang">HTML</span>
+        <div class="html-preview-tabs-right">
+          <button class="html-preview-tab active" data-view="code">代码</button>
+          <button class="html-preview-tab" data-view="preview">预览</button>
+        </div>
+      </div>
+      <div class="html-preview-body">
+        <pre class="html-source"><code>${escapeHtml(html)}</code></pre>
+        <iframe class="html-frame" sandbox srcdoc="${escapeHtml(html)}" loading="lazy"></iframe>
+      </div>
+    `;
+    pre.replaceWith(wrap);
+  });
+}
+
 function renderChat() {
   const container = document.getElementById('messages');
   if (state.chat.length === 0) {
@@ -855,6 +960,8 @@ function renderChat() {
       throwOnError: false,
     });
   }
+  // ```html 代码块增强：替换为「代码/预览」切换 widget
+  enhanceHtmlCodeBlocks(container);
   container.scrollTop = container.scrollHeight;
 }
 
@@ -1312,6 +1419,18 @@ document.getElementById('toggleKeyBtn').addEventListener('click', () => {
 
 // 测试连接
 document.getElementById('testConnBtn').addEventListener('click', testConnection);
+
+// HTML 代码块预览 tab 切换（事件委托，只绑一次）
+document.getElementById('messages').addEventListener('click', e => {
+  const tab = e.target.closest('.html-preview-tab');
+  if (!tab) return;
+  const widget = tab.closest('.html-preview');
+  if (!widget) return;
+  widget.setAttribute('data-state', tab.dataset.view);
+  widget.querySelectorAll('.html-preview-tab').forEach(t => {
+    t.classList.toggle('active', t === tab);
+  });
+});
 
 // 清空对话
 document.getElementById('clearChatBtn').addEventListener('click', () => {
