@@ -1199,10 +1199,15 @@ document.getElementById('clearChatBtn').addEventListener('click', () => {
   renderChat();
 });
 
-// 清空数据
+// 清空数据（保留已置顶卡片）
 document.getElementById('clearDataBtn').addEventListener('click', () => {
-  if (!confirm(`清空全部 ${state.data.length} 条训练数据？此操作不可撤销。`)) return;
-  state.data = [];
+  const total        = state.data.length;
+  const pinnedCount  = state.data.filter(it => it.pinned).length;
+  const unpinnedCount = total - pinnedCount;
+  if (total === 0)        { alert('暂无数据'); return; }
+  if (pinnedCount === total) { alert('全部数据都已置顶，无需清空'); return; }
+  if (!confirm(`清空 ${unpinnedCount} 条非置顶数据（保留 ${pinnedCount} 条置顶数据）？此操作不可撤销。`)) return;
+  state.data = state.data.filter(it => it.pinned);
   saveData();
   renderData();
 });
