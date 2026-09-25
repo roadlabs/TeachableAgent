@@ -4,7 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## The app
 
-**Teachable Agent (可训练智能体)** — single-page PWA. The app is one `index.html` (≈785 KB; ~1541 lines) with four libraries inlined: marked, KaTeX (+ auto-render + 20 woff2 fonts as base64), DOMPurify. Plus 3 sibling files for PWA: `manifest.json`, `sw.js`, `icon.svg`.
+**Teachable Agent (可训练智能体)** — single-page PWA. Three source files plus three PWA assets:
+
+| File | Size | Holds |
+|---|---|---|
+| `index.html` | ~5 KB | DOM structure only — no inline CSS/JS |
+| `styles.css`  | ~390 KB | All CSS (app rules + KaTeX CSS with 20 woff2 fonts base64-inlined) |
+| `app.js`      | ~385 KB | All JS in order: marked, KaTeX, auto-render, DOMPurify, then the app script |
+| `manifest.json` | — | PWA manifest |
+| `sw.js`       | — | service worker (cache-first, versioned) |
+| `icon.svg`    | — | 512×512 app icon |
 
 Three layers wired by SVG bezier "balls" flying between them:
 - **用户界面** (UI): chat messages + composer.
@@ -17,18 +26,7 @@ Three layers wired by SVG bezier "balls" flying between them:
 
 - Open directly: `open index.html` — works via `file://` for everything except PWA features (SW / install).
 - Serve for PWA testing: `python3 -m http.server 8000` then visit `http://localhost:8000`. SW requires HTTPS or localhost.
-- **Syntax-check** the inline app script. The file has 5 `<script>` blocks (4 libs + 1 app), so the original `sed` recipe no longer works — use line ranges:
-
-  ```sh
-  python3 -c "
-  with open('index.html') as f: lines = f.readlines()
-  start = next(i for i, l in enumerate(lines)
-               if l.strip() == '<script>' and lines[i+1].lstrip().startswith(\"'use strict';\"))
-  end = next(i for i in range(start, len(lines)) if lines[i].strip() == '</script>')
-  open('/tmp/app.js', 'w').writelines(lines[start+1:end])
-  " && node --check /tmp/app.js
-  ```
-
+- **Syntax-check** the JS: `node --check app.js` (single file, no extraction needed).
 - No build / lint / test tooling. This **is** a git repo with remote `https://github.com/roadlabs/TeachableAgent.git`.
 
 ## Persistence model
@@ -66,12 +64,14 @@ Every mutation flows through three save functions that each:
 
 ## PWA file layout
 
-- `index.html` — app; inlines 4 libs + KaTeX fonts.
+- `index.html` — DOM structure only.
+- `styles.css` — all CSS (app + KaTeX).
+- `app.js` — all JS (4 libs + app script).
 - `manifest.json` — name / `display: standalone` / `theme_color: #6366f1` / icons (`any` + `maskable`).
-- `sw.js` — cache-first. Versioned by `const CACHE = 'teachable-agent-vN'`. **Bump N on each app release**; the `activate` handler deletes stale caches and `clients.claim()`s.
+- `sw.js` — cache-first. Versioned by `const CACHE = 'teachable-agent-vN'` (currently v2). **Bump N on each app release**; the `activate` handler deletes stale caches and `clients.claim()`s. `ASSETS` lists all 6 files (`.`, `index.html`, `styles.css`, `app.js`, `manifest.json`, `icon.svg`).
 - `icon.svg` — 512×512; SVG is supported by Chrome 120+ / Safari, no PNG fallback shipped.
 
-All four files must live at the same directory for the SW scope to cover the app.
+All six files must live at the same directory for the SW scope to cover the app.
 
 ## Mobile responsive
 
@@ -83,4 +83,4 @@ All four files must live at the same directory for the SW scope to cover the app
 - **Sandboxed HTML preview.** ```` ```html ```` blocks become a `sandbox=""` iframe (no `allow-*` tokens — no script, no same-origin, no form submit, no top-nav). DOMPurify sanitizes the source separately; KaTeX scans text nodes after. LLM output never executes JS or escapes the iframe sandbox.
 - **Pin is UI-only.** Per-card pin floats cards to the top of the visible list, but the LLM context still uses `state.data.filter().reverse()`. Pinning doesn't anchor to context head. If you want that semantic, change the context build in `handleSend`, not the renderer.
 - **Mobile tabs depend on DOM order.** All three `<section class="layer">` stay in the DOM at all viewports — only `display` flips. Switching tabs only toggles classes; the active layer naturally appears at the top because the others are `display: none`.
-- **The 5 `<script>` blocks are not all the app.** When grepping for app symbols, exclude lines 905-929 (the 4 library scripts) and the last one starting with `'use strict';`. A naive `sed '/<script>/,/<\/script>/p'` collapses them into one giant string that fails to parse.
+- **The 5 JS chunks in `app.js` are not all the app.** When grepping for app symbols, the file is `marked` + `katex` + `auto-render` + `dompurify` + the app script (starts with `'use strict';`). A naive "first occurrence of `use strict`" extraction grabs one of the libraries' IIFEs instead of the app entry point.
