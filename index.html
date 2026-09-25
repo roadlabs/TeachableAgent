@@ -20,6 +20,13 @@
 
   /* ============ Header ============ */
   .app-header { padding: 28px 36px 12px; }
+  .app-header-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .app-header-title h1 { flex: 1; min-width: 0; }
   .app-header h1 {
     font-size: 28px;
     font-weight: 700;
@@ -795,11 +802,14 @@
 <body>
 
 <header class="app-header">
-  <h1>Teachable Agent</h1>
-  <p class="subtitle">用户界面 · 数据存储 · 服务接口 — 三层联动，数据持久化在浏览器本地</p>
+  <div class="app-header-title">
+    <h1>Teachable Agent</h1>
+    <button class="ghost-btn" id="projectBtn" title="管理项目（当前项目的数据 / 聊天 / API 配置都在这里）">📁 <span id="projectName">默认项目</span></button>
+  </div>
+  <p class="subtitle">用户界面 · 数据存储 · 服务接口 — 三层联动，项目数据持久化在浏览器本地</p>
   <div class="badges">
     <span class="badge">OpenAI 兼容</span>
-    <span class="badge">localStorage</span>
+    <span class="badge">IndexedDB</span>
     <span class="badge">单文件 · 无依赖</span>
   </div>
 </header>
@@ -828,7 +838,6 @@
       <span class="layer-icon">📚</span>
       <h2>数据存储</h2>
       <span class="counter" id="dataCount">0</span>
-      <button class="ghost-btn" id="projectBtn" title="管理项目">📁 <span id="projectName">默认项目</span></button>
       <div class="layer-actions">
         <button class="ghost-btn" id="exportDataBtn">导出 JSON</button>
         <button class="ghost-btn danger" id="clearDataBtn">清空</button>
