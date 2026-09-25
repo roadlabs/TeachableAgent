@@ -4,16 +4,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## The app
 
-**Teachable Agent (可训练智能体)** — single-page PWA. Three source files plus three PWA assets:
+**Teachable Agent (可训练智能体)** — single-page PWA. Source is split into HTML + CSS + a `vendor/` directory (third-party libs) + an `app/` directory (in-house modules, organized by feature) + three PWA assets.
 
-| File | Size | Holds |
-|---|---|---|
-| `index.html` | ~5 KB | DOM structure only — no inline CSS/JS |
-| `styles.css`  | ~390 KB | All CSS (app rules + KaTeX CSS with 20 woff2 fonts base64-inlined) |
-| `app.js`      | ~385 KB | All JS in order: marked, KaTeX, auto-render, DOMPurify, then the app script |
-| `manifest.json` | — | PWA manifest |
-| `sw.js`       | — | service worker (cache-first, versioned) |
-| `icon.svg`    | — | 512×512 app icon |
+### File layout
+
+```
+index.html              ~6 KB   DOM structure only
+styles.css            ~390 KB   All CSS (app + KaTeX CSS + 20 woff2 fonts base64)
+vendor/
+  marked.min.js        ~39 KB   markdown parser
+  katex.min.js        ~276 KB   math renderer
+  auto-render.min.js  ~3.5 KB   KaTeX DOM scanner
+  dompurify.min.js     ~22 KB   HTML sanitizer (renamed from purify.min.js)
+app/
+  core.js         ~3 KB   constants / state / localStorage save-load / utils (escapeHtml, formatTime, uid)
+  idb.js          ~2 KB   IndexedDB wrapper (openDb, dbAllProjects, dbPutProject, dbDeleteProject)
+  svg.js          ~7 KB   SVG paths + balls + flyText + glow filters
+  api.js          ~2 KB   callLLM + testConnection
+  markdown.js     ~2 KB   renderAssistantHtml + decodeHtmlEntities + enhanceHtmlCodeBlocks
+  projects.js     ~7 KB   project CRUD + modal + initProjects
+  render.js      ~10 KB   renderSettings/Chat/Data/DataItem + appendOutputToItem + attachDataInteractions
+  events.js       ~5 KB   all addEventListener bindings
+  main.js         ~6 KB   handleSend + composer + init flow
+manifest.json            —    PWA manifest
+sw.js                    —    service worker (cache-first, versioned)
+icon.svg                 —    512×512 app icon
+```
+
+**Script load order** (in `index.html`, top-down — global-vars approach, no ES modules):
+
+1. `vendor/marked.min.js` → exposes `marked`
+2. `vendor/katex.min.js` → exposes `katex`
+3. `vendor/auto-render.min.js` → exposes `renderMathInElement` (depends on `katex`)
+4. `vendor/dompurify.min.js` → exposes `DOMPurify`
+5. `app/core.js` → state + utils (no deps on vendor)
+6. `app/idb.js` (no deps)
+7. `app/svg.js` (no deps)
+8. `app/api.js` (uses `state.settings`)
+9. `app/markdown.js` (uses marked, DOMPurify, escapeHtml)
+10. `app/projects.js` (uses core, idb, renderProjectList from render)
+11. `app/render.js` (uses core, markdown)
+12. `app/events.js` (wires everything — loads after all feature modules)
+13. `app/main.js` (handleSend + init — loads last)
 
 Three layers wired by SVG bezier "balls" flying between them:
 - **用户界面** (UI): chat messages + composer.
@@ -26,7 +58,7 @@ Three layers wired by SVG bezier "balls" flying between them:
 
 - Open directly: `open index.html` — works via `file://` for everything except PWA features (SW / install).
 - Serve for PWA testing: `python3 -m http.server 8000` then visit `http://localhost:8000`. SW requires HTTPS or localhost.
-- **Syntax-check** the JS: `node --check app.js` (single file, no extraction needed).
+- **Syntax-check** all app modules: `for f in app/*.js; do node --check "$f"; done`.
 - No build / lint / test tooling. This **is** a git repo with remote `https://github.com/roadlabs/TeachableAgent.git`.
 
 ## Persistence model
@@ -66,12 +98,13 @@ Every mutation flows through three save functions that each:
 
 - `index.html` — DOM structure only.
 - `styles.css` — all CSS (app + KaTeX).
-- `app.js` — all JS (4 libs + app script).
+- `vendor/*.min.js` — 4 third-party libraries.
+- `app/*.js` — 9 in-house modules (see load order in **Run / dev**).
 - `manifest.json` — name / `display: standalone` / `theme_color: #6366f1` / icons (`any` + `maskable`).
-- `sw.js` — cache-first. Versioned by `const CACHE = 'teachable-agent-vN'` (currently v2). **Bump N on each app release**; the `activate` handler deletes stale caches and `clients.claim()`s. `ASSETS` lists all 6 files (`.`, `index.html`, `styles.css`, `app.js`, `manifest.json`, `icon.svg`).
+- `sw.js` — cache-first. Versioned by `const CACHE = 'teachable-agent-vN'` (currently v3). **Bump N on each app release**; the `activate` handler deletes stale caches and `clients.claim()`s. `ASSETS` lists every file the app needs to load offline (4 vendor + 9 app + index.html + styles.css + manifest.json + icon.svg = 19 entries).
 - `icon.svg` — 512×512; SVG is supported by Chrome 120+ / Safari, no PNG fallback shipped.
 
-All six files must live at the same directory for the SW scope to cover the app.
+All files must live at the project root for the SW scope (default `./`) to cover them.
 
 ## Mobile responsive
 
@@ -83,4 +116,4 @@ All six files must live at the same directory for the SW scope to cover the app.
 - **Sandboxed HTML preview.** ```` ```html ```` blocks become a `sandbox=""` iframe (no `allow-*` tokens — no script, no same-origin, no form submit, no top-nav). DOMPurify sanitizes the source separately; KaTeX scans text nodes after. LLM output never executes JS or escapes the iframe sandbox.
 - **Pin is UI-only.** Per-card pin floats cards to the top of the visible list, but the LLM context still uses `state.data.filter().reverse()`. Pinning doesn't anchor to context head. If you want that semantic, change the context build in `handleSend`, not the renderer.
 - **Mobile tabs depend on DOM order.** All three `<section class="layer">` stay in the DOM at all viewports — only `display` flips. Switching tabs only toggles classes; the active layer naturally appears at the top because the others are `display: none`.
-- **The 5 JS chunks in `app.js` are not all the app.** When grepping for app symbols, the file is `marked` + `katex` + `auto-render` + `dompurify` + the app script (starts with `'use strict';`). A naive "first occurrence of `use strict`" extraction grabs one of the libraries' IIFEs instead of the app entry point.
+- **The 13 `<script>` tags in `index.html` must load in the order listed under "Script load order".** Each app module relies on globals exposed by the previous one (no ES modules, no bundler — plain script-tag globals). Reordering or removing a tag breaks init silently (e.g., `initProjects is not defined`). The vendor block must come first; the app block loads in dependency order; `events.js` and `main.js` go last.

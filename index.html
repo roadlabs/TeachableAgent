@@ -136,8 +136,24 @@
 
 
 
-<!-- ============ 项目管理模态框（必须放在 
+<!-- ============ 项目管理模态框（必须放在 <script> 之前，让监听器能找到这些元素） ============ -->
 
-<script src="app.js"></script>
+<!-- Vendor libraries (load order matters) -->
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/katex.min.js"></script>
+<script src="vendor/auto-render.min.js"></script>
+<script src="vendor/dompurify.min.js"></script>
+
+<!-- App modules (load order = dependency order) -->
+<script src="app/core.js"></script>
+<script src="app/idb.js"></script>
+<script src="app/svg.js"></script>
+<script src="app/api.js"></script>
+<script src="app/markdown.js"></script>
+<script src="app/projects.js"></script>
+<script src="app/render.js"></script>
+<script src="app/events.js"></script>
+<script src="app/main.js"></script>
+
 </body>
 </html>

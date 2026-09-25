@@ -1,7 +1,26 @@
 // Teachable Agent service worker
 // 缓存策略：app shell cache-first；版本号更新时（teachable-agent-vN）activate 阶段清理旧缓存
-const CACHE  = 'teachable-agent-v2';
-const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icon.svg'];
+const CACHE  = 'teachable-agent-v3';
+const ASSETS = [
+  './',
+  './index.html',
+  './styles.css',
+  './app/core.js',
+  './app/idb.js',
+  './app/svg.js',
+  './app/api.js',
+  './app/markdown.js',
+  './app/projects.js',
+  './app/render.js',
+  './app/events.js',
+  './app/main.js',
+  './vendor/marked.min.js',
+  './vendor/katex.min.js',
+  './vendor/auto-render.min.js',
+  './vendor/dompurify.min.js',
+  './manifest.json',
+  './icon.svg',
+];
 
 self.addEventListener('install', e => {
   self.skipWaiting();
