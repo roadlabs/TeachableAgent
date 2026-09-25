@@ -1,6 +1,6 @@
 // Teachable Agent service worker
 // 缓存策略：app shell cache-first；版本号更新时（teachable-agent-vN）activate 阶段清理旧缓存
-const CACHE  = 'teachable-agent-v3';
+const CACHE  = 'teachable-agent-v4';
 const ASSETS = [
   './',
   './index.html',
