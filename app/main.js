@@ -174,6 +174,7 @@ document.getElementById('userInput').addEventListener('keydown', e => {
 // =====================================================================
 loadState();
 renderSettings();
+updateSortButton();   // 把 sortDescending 当前值同步到按钮标签
 
 // 异步：从 IndexedDB 加载当前项目（settings 走 localStorage 是同步的，
 // data/chat 走 IDB 是异步的，必须先 await 再渲染）

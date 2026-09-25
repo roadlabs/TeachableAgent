@@ -129,6 +129,15 @@ document.getElementById('clearDataBtn').addEventListener('click', () => {
   renderData();
 });
 
+// 数据层排序方向切换（busy 守卫：飞行中切会破坏动画目标）
+document.getElementById('sortBtn').addEventListener('click', () => {
+  if (busy) return;
+  sortDescending = !sortDescending;
+  saveSort();
+  updateSortButton();
+  renderData();
+});
+
 // 导出数据
 document.getElementById('exportDataBtn').addEventListener('click', () => {
   if (state.data.length === 0) { alert('暂无数据可导出'); return; }

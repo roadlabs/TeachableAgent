@@ -54,9 +54,14 @@ function renderData(highlightInputId = null, highlightOutputId = null, flyingInI
     list.innerHTML = '<div class="empty-state">还没有训练数据。开始聊天后会自动累积。<br>🖐 拖拽手柄可排序 · 每个面板 header 上的 📌 可置顶到列表顶部。<br>× 删除单面板。点击右上角「导出」可下载为 JSON。</div>';
     return;
   }
-  // 渲染顺序：置顶组优先，按 state.data 原顺序排；非置顶组紧随其后
+  // 渲染顺序：置顶组优先（组内按 sortDescending 决定方向），非置顶组紧随其后
+  // sortDescending 是纯视图偏好，不动 state.data —— 与拖拽 / LLM context 解耦
   const pinned = state.data.filter(it => it.pinned);
   const rest   = state.data.filter(it => !it.pinned);
+  if (!sortDescending) {
+    pinned.reverse();
+    rest.reverse();
+  }
   const ordered = pinned.concat(rest);
   list.innerHTML = ordered.map(item => renderDataItemHtml(item, highlightInputId, highlightOutputId, flyingInIds)).join('');
   attachDataInteractions();
@@ -241,5 +246,12 @@ function appendOutputToItem(itemId) {
   target.classList.remove('pending');
 }
 
-// 把一段文本从 sourceEl 飞到 targetEl（HTML 气泡 + CSS transform）
-// type: 'input' | 'output'
+// 同步排序按钮的标签 + title —— init 和 toggle 时调用
+function updateSortButton() {
+  const btn = document.getElementById('sortBtn');
+  if (!btn) return;
+  btn.textContent = sortDescending ? '↓ 最新在上' : '↑ 最早在上';
+  btn.title = sortDescending
+    ? '当前：最新在上。点击切换到「最早在上」'
+    : '当前：最早在上。点击切换到「最新在上」';
+}

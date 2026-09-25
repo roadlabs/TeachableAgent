@@ -16,9 +16,10 @@ const PROVIDERS = {
 };
 
 const STORAGE_KEYS = {
-  settings: 'ta_settings_v1',
-  data:     'ta_data_v1',
-  chat:     'ta_chat_v1',
+  settings:       'ta_settings_v1',
+  data:           'ta_data_v1',
+  chat:           'ta_chat_v1',
+  sortDescending: 'ta_sort_descending_v1',
 };
 
 // =====================================================================
@@ -30,11 +31,17 @@ let state = {
   chat: [],
 };
 
+// 视图偏好（不属于项目数据，跨项目共享用户偏好；不放进 state 对象）
+let sortDescending = true;   // 默认最新在上
+
 function loadState() {
   // settings 仍走 localStorage；data / chat 由 initProjects() 从 IndexedDB 加载
   try {
     const s = localStorage.getItem(STORAGE_KEYS.settings);
     if (s) state.settings = { ...state.settings, ...JSON.parse(s) };
+    const sd = localStorage.getItem(STORAGE_KEYS.sortDescending);
+    // 显式 'false' 才视为「最早在上」；缺失或 'true' 视为默认「最新在上」
+    sortDescending = sd !== 'false';
   } catch (e) { console.warn('加载设置失败:', e); }
 }
 
@@ -51,6 +58,7 @@ function migrateItemPinning(items) {
 const saveSettings = () => { localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings)); persistCurrentProject(); };
 const saveData     = () => { localStorage.setItem(STORAGE_KEYS.data, JSON.stringify(state.data)); persistCurrentProject(); };
 const saveChat     = () => { localStorage.setItem(STORAGE_KEYS.chat, JSON.stringify(state.chat)); persistCurrentProject(); };
+const saveSort     = () => localStorage.setItem(STORAGE_KEYS.sortDescending, String(sortDescending));
 
 // =====================================================================
 // Utilities
