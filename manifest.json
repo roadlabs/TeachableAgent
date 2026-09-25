@@ -1,0 +1,26 @@
+{
+  "name": "Teachable Agent",
+  "short_name": "Teachable",
+  "description": "可训练智能体 — 用户界面 / 数据存储 / 服务接口 三层联动",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f7fb",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

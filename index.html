@@ -2,8 +2,15 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Teachable Agent · 可训练智能体</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#6366f1">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Teachable Agent">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -2171,6 +2178,13 @@ requestAnimationFrame(() => {
   autoResizeTextarea();
 });
 window.addEventListener('resize', updateConnectionPaths);
+
+// PWA：注册 service worker（缓存 app shell，离线可用；localhost / HTTPS 才生效）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW 注册失败:', e));
+  });
+}
 
 // 如果没有 API key，温和提示
 if (!state.settings.apiKey) {
